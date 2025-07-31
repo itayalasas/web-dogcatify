@@ -10,7 +10,7 @@ const Footer = () => {
           {/* Brand */}
           <div className="space-y-4">
             <div className="flex items-center space-x-3">
-              <img src="/logo-fondo-web.png" alt="DogCatify" className="h-10 w-10" />
+              <img src="/logo-transp.png" alt="DogCatify" className="h-10 w-10" />
               <h3 className="text-2xl font-bold">DogCatify</h3>
             </div>
             <p className="text-gray-400">
