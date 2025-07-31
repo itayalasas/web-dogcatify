@@ -76,7 +76,7 @@ const Hero = () => {
             <div className="bg-gradient-to-br from-teal-400 to-cyan-500 rounded-3xl p-8 shadow-2xl">
               <div className="bg-white rounded-2xl p-6 space-y-4">
                 <div className="flex items-center space-x-3">
-                  <img src="/logo-dogcatify.png" alt="DogCatify" className="h-8 w-8" />
+                  <img src="/logo-dogcatify.jpg" alt="DogCatify" className="h-8 w-8" />
                   <div className="text-lg font-semibold text-gray-800">Mi Mascota</div>
                 </div>
                 
