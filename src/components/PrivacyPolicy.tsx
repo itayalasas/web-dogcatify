@@ -247,7 +247,7 @@ const PrivacyPolicy = () => {
       <footer className="bg-white border-t border-teal-100 mt-16">
         <div className="container mx-auto px-4 py-8">
           <div className="flex items-center justify-center">
-            <img src="/logo-dogcatify.png" alt="DogCatify" className="h-8 w-8 mr-3" />
+            <img src="/logo-dogcatify.jpg" alt="DogCatify" className="h-8 w-8 mr-3" />
             <span className="text-teal-800 font-semibold">DogCatify</span>
             <span className="text-gray-500 ml-2">- Cuidando a tus mascotas con amor</span>
           </div>
