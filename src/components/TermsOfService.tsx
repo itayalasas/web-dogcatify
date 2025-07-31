@@ -248,7 +248,7 @@ const TermsOfService = () => {
                     <Phone className="h-5 w-5 mr-3" />
                     <div>
                       <div className="font-semibold">Teléfono</div>
-                      <div className="text-teal-100">*598 92519111</div>
+                      <div className="text-teal-100">+598 92519111</div>
                     </div>
                   </div>
                   
