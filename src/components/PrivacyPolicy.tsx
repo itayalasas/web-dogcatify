@@ -17,7 +17,7 @@ const PrivacyPolicy = () => {
               Volver al inicio
             </Link>
             <div className="flex items-center space-x-3">
-              <img src="/logo-dogcatify.png" alt="DogCatify" className="h-10 w-10" />
+              <img src="/logo-dogcatify.jpg" alt="DogCatify" className="h-10 w-10" />
               <h1 className="text-2xl font-bold text-teal-800">DogCatify</h1>
             </div>
           </div>
