@@ -39,6 +39,14 @@ const Footer = () => {
                   Política de Privacidad
                 </Link>
               </li>
+              <li>
+                <Link 
+                  to="/terminos"
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  Términos de Servicio
+                </Link>
+              </li>
             </ul>
           </div>
 
@@ -87,9 +95,12 @@ const Footer = () => {
               >
                 Privacidad
               </Link>
-              <a href="#" className="text-gray-400 hover:text-white text-sm transition-colors">
-                Términos de Uso
-              </a>
+              <Link 
+                to="/terminos"
+                className="text-gray-400 hover:text-white text-sm transition-colors"
+              >
+                Términos
+              </Link>
               <a href="#" className="text-gray-400 hover:text-white text-sm transition-colors">
                 Cookies
               </a>

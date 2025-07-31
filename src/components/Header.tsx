@@ -27,6 +27,12 @@ const Header = () => {
             >
               Privacidad
             </Link>
+            <Link 
+              to="/terminos"
+              className="text-gray-700 hover:text-teal-600 transition-colors"
+            >
+              Términos
+            </Link>
             <button className="bg-teal-600 text-white px-6 py-2 rounded-full hover:bg-teal-700 transition-colors">
               Descargar App
             </button>
@@ -54,6 +60,12 @@ const Header = () => {
                 className="text-left text-gray-700 hover:text-teal-600 transition-colors"
               >
                 Privacidad
+              </Link>
+              <Link 
+                to="/terminos"
+                className="text-left text-gray-700 hover:text-teal-600 transition-colors"
+              >
+                Términos
               </Link>
               <button className="bg-teal-600 text-white px-6 py-2 rounded-full hover:bg-teal-700 transition-colors w-fit">
                 Descargar App
