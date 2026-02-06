@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Clock, User, Phone, Mail, PawPrint, DollarSign, Plus } from 'lucide-react';
+import { Calendar, Clock, User, Phone, Mail, PawPrint, DollarSign, Plus, Search, X } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useNotification } from '../../hooks/useNotification';
 import { useAuth } from '../../contexts/AuthContext';
@@ -20,14 +20,32 @@ interface Pet {
   owner_id: string;
 }
 
+interface CustomerProfile {
+  id: string;
+  email: string;
+  display_name: string;
+  phone: string;
+}
+
+interface TimeSlot {
+  time: string;
+  available: boolean;
+}
+
 const ManualBooking = () => {
   const { user } = useAuth();
   const { showNotification, NotificationContainer } = useNotification();
   const [services, setServices] = useState<Service[]>([]);
   const [pets, setPets] = useState<Pet[]>([]);
   const [loading, setLoading] = useState(false);
+  const [searchResults, setSearchResults] = useState<CustomerProfile[]>([]);
+  const [showSearchResults, setShowSearchResults] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [searchType, setSearchType] = useState<'email' | 'phone' | 'name'>('email');
+  const [availableTimeSlots, setAvailableTimeSlots] = useState<TimeSlot[]>([]);
   const [formData, setFormData] = useState({
     service_id: '',
+    customer_id: '',
     customer_email: '',
     customer_name: '',
     customer_phone: '',
@@ -40,8 +58,10 @@ const ManualBooking = () => {
   });
 
   useEffect(() => {
-    loadServices();
-  }, []);
+    if (user?.id) {
+      loadServices();
+    }
+  }, [user?.id]);
 
   const loadServices = async () => {
     try {
@@ -54,49 +74,129 @@ const ManualBooking = () => {
 
       if (error) throw error;
       setServices(data || []);
-    } catch (error) {
+
+      if (!data || data.length === 0) {
+        showNotification('info', 'No tienes servicios activos. Activa al menos un servicio para agendar citas.');
+      }
+    } catch (error: any) {
       console.error('Error loading services:', error);
-      showNotification('error', 'No se pudieron cargar los servicios');
+      showNotification('error', 'No se pudieron cargar los servicios: ' + error.message);
     }
   };
 
+  const loadAvailableTimeSlots = async (date: string, serviceId: string) => {
+    if (!date || !serviceId) return;
+
+    try {
+      const selectedService = services.find(s => s.id === serviceId);
+      if (!selectedService) return;
+
+      const { data: bookings, error } = await supabase
+        .from('bookings')
+        .select('time, end_time, service_duration')
+        .eq('partner_id', user?.id)
+        .eq('date', date)
+        .neq('status', 'cancelled');
+
+      if (error) throw error;
+
+      const slots: TimeSlot[] = [];
+      const startHour = 8;
+      const endHour = 20;
+      const duration = selectedService.duration || 60;
+
+      for (let hour = startHour; hour < endHour; hour++) {
+        for (let minute = 0; minute < 60; minute += 30) {
+          const timeStr = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+
+          const isAvailable = !bookings?.some(booking => {
+            const bookingStart = booking.time;
+            const bookingEnd = booking.end_time;
+
+            if (!bookingStart || !bookingEnd) return false;
+
+            return timeStr >= bookingStart && timeStr < bookingEnd;
+          });
+
+          slots.push({
+            time: timeStr,
+            available: isAvailable
+          });
+        }
+      }
+
+      setAvailableTimeSlots(slots);
+    } catch (error: any) {
+      console.error('Error loading time slots:', error);
+    }
+  };
+
+  useEffect(() => {
+    if (formData.date && formData.service_id) {
+      loadAvailableTimeSlots(formData.date, formData.service_id);
+    }
+  }, [formData.date, formData.service_id]);
+
   const searchCustomer = async () => {
-    if (!formData.customer_email) {
-      showNotification('warning', 'Ingrese un email para buscar');
+    if (!searchTerm.trim()) {
+      showNotification('warning', 'Ingrese un término de búsqueda');
       return;
     }
 
     try {
-      const { data: profile, error: profileError } = await supabase
+      let query = supabase
         .from('profiles')
-        .select('id, display_name, phone, email')
-        .eq('email', formData.customer_email)
-        .maybeSingle();
+        .select('id, display_name, phone, email');
+
+      if (searchType === 'email') {
+        query = query.ilike('email', `%${searchTerm}%`);
+      } else if (searchType === 'phone') {
+        query = query.ilike('phone', `%${searchTerm}%`);
+      } else if (searchType === 'name') {
+        query = query.ilike('display_name', `%${searchTerm}%`);
+      }
+
+      const { data: profiles, error: profileError } = await query.limit(10);
 
       if (profileError) throw profileError;
 
-      if (profile) {
-        setFormData({
-          ...formData,
-          customer_name: profile.display_name || '',
-          customer_phone: profile.phone || ''
-        });
-
-        const { data: petsData, error: petsError } = await supabase
-          .from('pets')
-          .select('*')
-          .eq('owner_id', profile.id);
-
-        if (petsError) throw petsError;
-        setPets(petsData || []);
-        showNotification('success', 'Cliente encontrado');
+      if (profiles && profiles.length > 0) {
+        setSearchResults(profiles);
+        setShowSearchResults(true);
+        showNotification('success', `${profiles.length} cliente(s) encontrado(s)`);
       } else {
         showNotification('info', 'Cliente no encontrado. Complete los datos manualmente.');
-        setPets([]);
+        setSearchResults([]);
+        setShowSearchResults(false);
       }
     } catch (error: any) {
       console.error('Error searching customer:', error);
       showNotification('error', 'Error al buscar cliente');
+    }
+  };
+
+  const selectCustomer = async (customer: CustomerProfile) => {
+    setFormData({
+      ...formData,
+      customer_id: customer.id,
+      customer_email: customer.email,
+      customer_name: customer.display_name || '',
+      customer_phone: customer.phone || ''
+    });
+
+    setSearchTerm('');
+    setShowSearchResults(false);
+
+    try {
+      const { data: petsData, error: petsError } = await supabase
+        .from('pets')
+        .select('*')
+        .eq('owner_id', customer.id);
+
+      if (petsError) throw petsError;
+      setPets(petsData || []);
+    } catch (error: any) {
+      console.error('Error loading pets:', error);
     }
   };
 
@@ -107,81 +207,62 @@ const ManualBooking = () => {
     try {
       if (!formData.service_id || !formData.date || !formData.time) {
         showNotification('error', 'Complete todos los campos obligatorios');
+        setLoading(false);
+        return;
+      }
+
+      if (!formData.customer_id && !formData.customer_email) {
+        showNotification('error', 'Debe buscar y seleccionar un cliente primero');
+        setLoading(false);
         return;
       }
 
       const selectedService = services.find(s => s.id === formData.service_id);
       if (!selectedService) {
         showNotification('error', 'Servicio no encontrado');
+        setLoading(false);
         return;
       }
 
-      let customerId = null;
+      let customerId = formData.customer_id;
       let petId = null;
 
-      const { data: existingProfile } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('email', formData.customer_email)
-        .maybeSingle();
-
-      if (existingProfile) {
-        customerId = existingProfile.id;
-
-        if (formData.pet_id) {
-          petId = formData.pet_id;
-        } else if (formData.pet_name) {
-          const { data: newPet, error: petError } = await supabase
-            .from('pets')
-            .insert({
-              owner_id: customerId,
-              name: formData.pet_name,
-              species: 'dog'
-            })
-            .select()
-            .single();
-
-          if (petError) throw petError;
-          petId = newPet.id;
-        }
-      } else {
-        const { data: authUser, error: authError } = await supabase.auth.admin.createUser({
-          email: formData.customer_email,
-          password: Math.random().toString(36).slice(-8),
-          email_confirm: true
-        });
-
-        if (authError) throw authError;
-        customerId = authUser.user.id;
-
-        await supabase
+      if (!customerId) {
+        const { data: existingProfile } = await supabase
           .from('profiles')
-          .insert({
-            id: customerId,
-            email: formData.customer_email,
-            display_name: formData.customer_name,
-            phone: formData.customer_phone,
-            is_owner: true
-          });
+          .select('id')
+          .eq('email', formData.customer_email)
+          .maybeSingle();
 
-        if (formData.pet_name) {
-          const { data: newPet, error: petError } = await supabase
-            .from('pets')
-            .insert({
-              owner_id: customerId,
-              name: formData.pet_name,
-              species: 'dog'
-            })
-            .select()
-            .single();
-
-          if (petError) throw petError;
-          petId = newPet.id;
+        if (existingProfile) {
+          customerId = existingProfile.id;
+        } else {
+          showNotification('error', 'Cliente no encontrado. Por favor, búsquelo primero usando el botón de búsqueda.');
+          setLoading(false);
+          return;
         }
       }
 
+      if (formData.pet_id) {
+        petId = formData.pet_id;
+      } else if (formData.pet_name) {
+        const { data: newPet, error: petError } = await supabase
+          .from('pets')
+          .insert({
+            owner_id: customerId,
+            name: formData.pet_name,
+            species: 'dog'
+          })
+          .select()
+          .single();
+
+        if (petError) throw petError;
+        petId = newPet.id;
+      }
+
       if (!petId) {
-        showNotification('error', 'Debe especificar una mascota');
+        showNotification('error', 'Debe seleccionar o crear una mascota');
+        setLoading(false);
         return;
       }
 
@@ -254,30 +335,77 @@ const ManualBooking = () => {
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="bg-teal-50 border border-teal-200 rounded-lg p-4">
               <h3 className="font-semibold text-teal-900 mb-3">Información del Cliente</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Email del Cliente *
-                  </label>
-                  <div className="flex gap-2">
-                    <input
-                      type="email"
-                      value={formData.customer_email}
-                      onChange={(e) => setFormData({ ...formData, customer_email: e.target.value })}
-                      required
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-                      placeholder="cliente@ejemplo.com"
-                    />
-                    <button
-                      type="button"
-                      onClick={searchCustomer}
-                      className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors"
-                    >
-                      Buscar
-                    </button>
-                  </div>
+
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Buscar Cliente
+                </label>
+                <div className="flex gap-2 mb-2">
+                  <select
+                    value={searchType}
+                    onChange={(e) => setSearchType(e.target.value as 'email' | 'phone' | 'name')}
+                    className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                  >
+                    <option value="email">Email</option>
+                    <option value="phone">Teléfono</option>
+                    <option value="name">Nombre</option>
+                  </select>
+                  <input
+                    type="text"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    placeholder={
+                      searchType === 'email' ? 'cliente@ejemplo.com' :
+                      searchType === 'phone' ? '099123456' :
+                      'Nombre del cliente'
+                    }
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                  />
+                  <button
+                    type="button"
+                    onClick={searchCustomer}
+                    className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors flex items-center gap-2"
+                  >
+                    <Search className="h-4 w-4" />
+                    Buscar
+                  </button>
                 </div>
 
+                {showSearchResults && searchResults.length > 0 && (
+                  <div className="bg-white border border-teal-300 rounded-lg mt-2 max-h-60 overflow-y-auto">
+                    <div className="p-2">
+                      <div className="flex justify-between items-center mb-2 pb-2 border-b">
+                        <span className="text-sm font-medium text-gray-700">
+                          {searchResults.length} resultado(s)
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setShowSearchResults(false)}
+                          className="text-gray-400 hover:text-gray-600"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                      {searchResults.map((customer) => (
+                        <button
+                          key={customer.id}
+                          type="button"
+                          onClick={() => selectCustomer(customer)}
+                          className="w-full text-left p-3 hover:bg-teal-50 rounded transition-colors mb-1"
+                        >
+                          <div className="font-medium text-gray-800">{customer.display_name}</div>
+                          <div className="text-sm text-gray-600">{customer.email}</div>
+                          {customer.phone && (
+                            <div className="text-sm text-gray-500">{customer.phone}</div>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Nombre Completo *
@@ -287,7 +415,22 @@ const ManualBooking = () => {
                     value={formData.customer_name}
                     onChange={(e) => setFormData({ ...formData, customer_name: e.target.value })}
                     required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                    readOnly
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-700"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Email *
+                  </label>
+                  <input
+                    type="email"
+                    value={formData.customer_email}
+                    onChange={(e) => setFormData({ ...formData, customer_email: e.target.value })}
+                    required
+                    readOnly
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-700"
                   />
                 </div>
 
@@ -300,7 +443,8 @@ const ManualBooking = () => {
                     value={formData.customer_phone}
                     onChange={(e) => setFormData({ ...formData, customer_phone: e.target.value })}
                     required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                    readOnly
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-700"
                   />
                 </div>
               </div>
@@ -380,17 +524,40 @@ const ManualBooking = () => {
                   />
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Hora *
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Horarios Disponibles *
                   </label>
-                  <input
-                    type="time"
-                    value={formData.time}
-                    onChange={(e) => setFormData({ ...formData, time: e.target.value })}
-                    required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-                  />
+                  {formData.date && formData.service_id ? (
+                    <div className="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2 max-h-60 overflow-y-auto p-2 bg-white border border-gray-200 rounded-lg">
+                      {availableTimeSlots.map((slot) => (
+                        <button
+                          key={slot.time}
+                          type="button"
+                          onClick={() => slot.available && setFormData({ ...formData, time: slot.time })}
+                          disabled={!slot.available}
+                          className={`px-3 py-2 rounded text-sm font-medium transition-colors ${
+                            formData.time === slot.time
+                              ? 'bg-teal-600 text-white'
+                              : slot.available
+                              ? 'bg-green-50 text-green-700 hover:bg-green-100 border border-green-200'
+                              : 'bg-gray-100 text-gray-400 cursor-not-allowed line-through'
+                          }`}
+                        >
+                          {slot.time}
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="p-4 text-center text-gray-500 bg-gray-50 rounded-lg border border-gray-200">
+                      Seleccione un servicio y fecha para ver horarios disponibles
+                    </div>
+                  )}
+                  {formData.time && (
+                    <div className="mt-2 text-sm text-teal-600 font-medium">
+                      Hora seleccionada: {formData.time}
+                    </div>
+                  )}
                 </div>
 
                 <div>
