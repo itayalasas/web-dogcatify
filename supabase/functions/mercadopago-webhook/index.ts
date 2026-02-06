@@ -158,6 +158,8 @@ Deno.serve(async (req: Request) => {
           })
           .eq("booking_id", bookingId);
       } else {
+        console.log("Creating new order for booking:", bookingId);
+
         const { data: partnerData } = await supabase
           .from("partners")
           .select("commission_percentage")
@@ -197,7 +199,7 @@ Deno.serve(async (req: Request) => {
           commission_split: commissionAmount,
         };
 
-        await supabase.from("orders").insert({
+        const { data: newOrder, error: orderError } = await supabase.from("orders").insert({
           partner_id: booking.partner_id,
           customer_id: booking.customer_id,
           booking_id: booking.id,
@@ -237,7 +239,13 @@ Deno.serve(async (req: Request) => {
               quantity: 1,
             },
           ],
-        });
+        }).select();
+
+        if (orderError) {
+          console.error("Error creating order:", orderError);
+        } else {
+          console.log("Order created successfully:", newOrder);
+        }
       }
     } else if (paymentStatus === "rejected" || paymentStatus === "cancelled") {
       bookingStatus = "cancelled";
