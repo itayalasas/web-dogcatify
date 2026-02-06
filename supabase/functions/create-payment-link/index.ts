@@ -1,4 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -12,6 +13,15 @@ interface PaymentLinkRequest {
   description: string;
   customerEmail: string;
   customerName: string;
+}
+
+interface MercadoPagoConfig {
+  access_token: string;
+  public_key: string;
+  email: string;
+  account_id: number;
+  is_connected: boolean;
+  is_test_mode: boolean;
 }
 
 Deno.serve(async (req: Request) => {
@@ -38,10 +48,21 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const mercadoPagoAccessToken = Deno.env.get("MERCADOPAGO_ACCESS_TOKEN");
-    if (!mercadoPagoAccessToken) {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
+    const supabase = createClient(supabaseUrl!, supabaseServiceKey!);
+
+    const { data: configData, error: configError } = await supabase
+      .from('admin_settings')
+      .select('value')
+      .eq('key', 'mercadopago_config')
+      .maybeSingle();
+
+    if (configError || !configData) {
+      console.error("Error fetching Mercado Pago config:", configError);
       return new Response(
-        JSON.stringify({ error: "Mercado Pago not configured" }),
+        JSON.stringify({ error: "Mercado Pago not configured in system settings" }),
         {
           status: 500,
           headers: {
@@ -52,7 +73,22 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const mpConfig = configData.value as MercadoPagoConfig;
+
+    if (!mpConfig.is_connected || !mpConfig.access_token) {
+      return new Response(
+        JSON.stringify({ error: "Mercado Pago not connected" }),
+        {
+          status: 500,
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+    }
+
+    const mercadoPagoAccessToken = mpConfig.access_token;
     const backUrl = `${supabaseUrl}/functions/v1/mercadopago-webhook`;
 
     const preference = {
