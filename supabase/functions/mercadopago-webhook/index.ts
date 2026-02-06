@@ -128,7 +128,8 @@ Deno.serve(async (req: Request) => {
       bookingStatus = "confirmed";
       bookingPaymentStatus = "approved";
 
-      await supabase
+      console.log(`Updating booking ${bookingId} to confirmed status`);
+      const { data: updatedBooking, error: bookingUpdateError } = await supabase
         .from("bookings")
         .update({
           status: bookingStatus,
@@ -138,7 +139,14 @@ Deno.serve(async (req: Request) => {
           payment_id: paymentId,
           payment_data: paymentData,
         })
-        .eq("id", bookingId);
+        .eq("id", bookingId)
+        .select();
+
+      if (bookingUpdateError) {
+        console.error("Error updating booking:", bookingUpdateError);
+      } else {
+        console.log("Booking updated successfully:", updatedBooking);
+      }
 
       const { data: existingOrder } = await supabase
         .from("orders")
@@ -148,7 +156,7 @@ Deno.serve(async (req: Request) => {
 
       if (existingOrder) {
         console.log("Updating existing order:", existingOrder.id);
-        await supabase
+        const { data: updatedOrder, error: orderUpdateError } = await supabase
           .from("orders")
           .update({
             status: "confirmed",
@@ -159,7 +167,14 @@ Deno.serve(async (req: Request) => {
             payment_status_detail: paymentStatusDetail,
             updated_at: new Date().toISOString(),
           })
-          .eq("booking_id", bookingId);
+          .eq("booking_id", bookingId)
+          .select();
+
+        if (orderUpdateError) {
+          console.error("Error updating order:", orderUpdateError);
+        } else {
+          console.log("Order updated successfully:", updatedOrder);
+        }
       } else {
         console.error("WARNING: Order not found for booking:", bookingId, "- Order should have been created when booking was created!");
       }
