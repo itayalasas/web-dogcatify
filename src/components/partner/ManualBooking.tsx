@@ -502,61 +502,44 @@ const ManualBooking = ({ onBookingCreated }: ManualBookingProps) => {
           showNotification('warning', 'No se pudo generar el link de pago automáticamente');
         }
 
-        const reservationDate = new Date(formData.date);
-        const dateFormatted = reservationDate.toLocaleDateString('es-UY', {
-          day: '2-digit',
-          month: '2-digit',
-          year: 'numeric'
-        });
+        if (paymentUrl) {
+          try {
+            const { data: { session } } = await supabase.auth.getSession();
+            const emailPayload = {
+              template_name: 'payment_link',
+              recipient_email: formData.customer_email,
+              data: {
+                client_name: formData.customer_name,
+                service_name: selectedService.name,
+                provider_name: partnerName,
+                payment_url: paymentUrl,
+                pet_name: formData.pet_name || pets.find(p => p.id === formData.pet_id)?.name
+              }
+            };
 
-        const { data: orderData } = await supabase
-          .from('orders')
-          .select('order_number')
-          .eq('booking_id', newBooking.id)
-          .maybeSingle();
+            const emailResponse = await fetch(
+              `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-email`,
+              {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${session?.access_token}`,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(emailPayload),
+              }
+            );
 
-        const orderNumber = orderData?.order_number || `RES-${String(newBooking.id).padStart(9, '0')}`;
-
-        const emailPayload = {
-          template_name: 'agenda_confirmation',
-          recipient_email: formData.customer_email,
-          order_id: newBooking.id.toString(),
-          wait_for_invoice: false,
-          data: {
-            client_name: formData.customer_name,
-            order_number: orderNumber,
-            service_name: selectedService.name,
-            provider_name: partnerName,
-            reservation_date: dateFormatted,
-            reservation_time: formData.time,
-            pet_name: formData.pet_name || pets.find(p => p.id === formData.pet_id)?.name,
-            payment_url: paymentUrl || 'Pendiente de generar',
-            payment_pending: true
-          }
-        };
-
-        try {
-          const { data: { session } } = await supabase.auth.getSession();
-          const emailResponse = await fetch(
-            `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-email`,
-            {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${session?.access_token}`,
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify(emailPayload),
+            if (emailResponse.ok) {
+              showNotification('success', 'Cita creada. Link de pago enviado al cliente por correo.');
+            } else {
+              showNotification('success', 'Cita creada. Link de pago: ' + paymentUrl);
             }
-          );
-
-          if (emailResponse.ok) {
-            showNotification('success', 'Cita creada y correo con link de pago enviado al cliente');
-          } else {
-            showNotification('success', 'Cita creada (error al enviar correo)');
+          } catch (emailError) {
+            console.error('Error sending payment link email:', emailError);
+            showNotification('success', 'Cita creada. Link de pago: ' + paymentUrl);
           }
-        } catch (emailError) {
-          console.error('Error sending email:', emailError);
-          showNotification('success', 'Cita creada (error al enviar correo)');
+        } else {
+          showNotification('success', 'Cita creada (pendiente de pago). El correo de confirmación se enviará cuando el cliente complete el pago.');
         }
 
         setTimeout(() => {
