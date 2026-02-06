@@ -38,6 +38,7 @@ const ManualBooking = () => {
   const [services, setServices] = useState<Service[]>([]);
   const [pets, setPets] = useState<Pet[]>([]);
   const [loading, setLoading] = useState(false);
+  const [partnerId, setPartnerId] = useState<string | null>(null);
   const [searchResults, setSearchResults] = useState<CustomerProfile[]>([]);
   const [showSearchResults, setShowSearchResults] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -59,33 +60,69 @@ const ManualBooking = () => {
 
   useEffect(() => {
     if (user?.id) {
-      loadServices();
+      loadPartnerData();
     }
   }, [user?.id]);
 
-  const loadServices = async () => {
+  const loadPartnerData = async () => {
     try {
+      const { data: partner, error } = await supabase
+        .from('partners')
+        .select('id')
+        .eq('user_id', user?.id)
+        .maybeSingle();
+
+      if (error) throw error;
+
+      if (partner) {
+        setPartnerId(partner.id);
+        loadServices(partner.id);
+      } else {
+        showNotification('error', 'No se encontró información del partner');
+      }
+    } catch (error: any) {
+      console.error('Error loading partner data:', error);
+      showNotification('error', 'Error al cargar datos del partner');
+    }
+  };
+
+  const loadServices = async (partnerIdToLoad: string) => {
+    try {
+      if (!partnerIdToLoad) {
+        console.error('No partner ID available');
+        return;
+      }
+
+      console.log('Loading services for partner:', partnerIdToLoad);
+
       const { data, error } = await supabase
         .from('partner_services')
-        .select('*')
-        .eq('partner_id', user?.id)
+        .select('id, name, price, duration, category, is_active')
+        .eq('partner_id', partnerIdToLoad)
         .eq('is_active', true)
         .order('name');
 
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase error loading services:', error);
+        throw error;
+      }
+
+      console.log('Services loaded:', data);
       setServices(data || []);
 
       if (!data || data.length === 0) {
-        showNotification('info', 'No tienes servicios activos. Activa al menos un servicio para agendar citas.');
+        showNotification('warning', 'No tienes servicios activos disponibles para agendar citas.');
+      } else {
+        console.log(`${data.length} servicios cargados correctamente`);
       }
     } catch (error: any) {
       console.error('Error loading services:', error);
-      showNotification('error', 'No se pudieron cargar los servicios: ' + error.message);
+      showNotification('error', 'Error al cargar servicios: ' + (error.message || 'Error desconocido'));
     }
   };
 
   const loadAvailableTimeSlots = async (date: string, serviceId: string) => {
-    if (!date || !serviceId) return;
+    if (!date || !serviceId || !partnerId) return;
 
     try {
       const selectedService = services.find(s => s.id === serviceId);
@@ -94,7 +131,7 @@ const ManualBooking = () => {
       const { data: bookings, error } = await supabase
         .from('bookings')
         .select('time, end_time, service_duration')
-        .eq('partner_id', user?.id)
+        .eq('partner_id', partnerId)
         .eq('date', date)
         .neq('status', 'cancelled');
 
@@ -273,10 +310,16 @@ const ManualBooking = () => {
       const endMins = endMinutes % 60;
       const endTime = `${String(endHours).padStart(2, '0')}:${String(endMins).padStart(2, '0')}`;
 
+      if (!partnerId) {
+        showNotification('error', 'No se pudo identificar el partner');
+        setLoading(false);
+        return;
+      }
+
       const { error: bookingError } = await supabase
         .from('bookings')
         .insert({
-          partner_id: user?.id,
+          partner_id: partnerId,
           service_id: formData.service_id,
           service_name: selectedService.name,
           service_duration: selectedService.duration,
@@ -303,6 +346,7 @@ const ManualBooking = () => {
 
       setFormData({
         service_id: '',
+        customer_id: '',
         customer_email: '',
         customer_name: '',
         customer_phone: '',
@@ -314,6 +358,8 @@ const ManualBooking = () => {
         payment_method: 'cash'
       });
       setPets([]);
+      setSearchResults([]);
+      setSearchTerm('');
     } catch (error: any) {
       console.error('Error creating booking:', error);
       showNotification('error', error.message || 'Error al crear la cita');
