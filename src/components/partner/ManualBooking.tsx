@@ -149,16 +149,26 @@ const ManualBooking = () => {
 
       const { data: ordersData, error: ordersError } = await supabase
         .from('orders')
-        .select(`
-          appointment_time,
-          service_id,
-          partner_services!inner(duration)
-        `)
+        .select('appointment_time, service_id')
         .eq('partner_id', partnerId)
         .eq('appointment_date', date + 'T00:00:00+00:00')
         .neq('status', 'cancelled');
 
       if (ordersError) throw ordersError;
+
+      const serviceIds = [...new Set(ordersData?.map(o => o.service_id).filter(Boolean))];
+      let servicesMap = new Map();
+
+      if (serviceIds.length > 0) {
+        const { data: servicesData } = await supabase
+          .from('partner_services')
+          .select('id, duration')
+          .in('id', serviceIds);
+
+        servicesData?.forEach(s => {
+          servicesMap.set(s.id, s.duration || 60);
+        });
+      }
 
       const { data: bookingsData, error: bookingsError } = await supabase
         .from('bookings')
@@ -171,7 +181,7 @@ const ManualBooking = () => {
 
       const existingBookings = [
         ...(ordersData?.map(order => {
-          const duration = (order.partner_services as any)?.duration || 60;
+          const duration = servicesMap.get(order.service_id) || 60;
           const [hours, minutes] = order.appointment_time.split(':').map(Number);
           const startMinutes = hours * 60 + minutes;
           const endMinutes = startMinutes + duration;
@@ -345,6 +355,21 @@ const ManualBooking = () => {
         }
       }
 
+      if (customerId && formData.customer_phone) {
+        const { data: currentProfile } = await supabase
+          .from('profiles')
+          .select('phone')
+          .eq('id', customerId)
+          .maybeSingle();
+
+        if (!currentProfile?.phone || currentProfile.phone !== formData.customer_phone) {
+          await supabase
+            .from('profiles')
+            .update({ phone: formData.customer_phone })
+            .eq('id', customerId);
+        }
+      }
+
       if (formData.pet_id) {
         petId = formData.pet_id;
       } else if (formData.pet_name) {
@@ -465,6 +490,12 @@ const ManualBooking = () => {
                     type="text"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        searchCustomer();
+                      }
+                    }}
                     placeholder={
                       searchType === 'email' ? 'cliente@ejemplo.com' :
                       searchType === 'phone' ? '099123456' :
@@ -554,9 +585,12 @@ const ManualBooking = () => {
                     value={formData.customer_phone}
                     onChange={(e) => setFormData({ ...formData, customer_phone: e.target.value })}
                     required
-                    readOnly
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-700"
+                    placeholder={!formData.customer_phone ? "Ingrese el teléfono del cliente" : ""}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
                   />
+                  {!formData.customer_phone && formData.customer_id && (
+                    <p className="text-xs text-amber-600 mt-1">Este cliente no tiene teléfono registrado. Por favor ingrese uno.</p>
+                  )}
                 </div>
               </div>
             </div>
