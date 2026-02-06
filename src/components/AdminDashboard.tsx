@@ -16,7 +16,12 @@ import {
   FileText,
   Shield,
   PawPrint,
+  Megaphone,
 } from 'lucide-react';
+import PromotionsManager from './admin/PromotionsManager';
+import PlacesManager from './admin/PlacesManager';
+import PartnersManager from './admin/PartnersManager';
+import SettingsManager from './admin/SettingsManager';
 
 const AdminDashboard = () => {
   const { user, signOut } = useAuth();
@@ -30,19 +35,105 @@ const AdminDashboard = () => {
 
   const menuItems = [
     { id: 'overview', label: 'Vista General', icon: BarChart3 },
-    { id: 'users', label: 'Usuarios', icon: Users },
+    { id: 'promotions', label: 'Promociones', icon: Megaphone },
+    { id: 'places', label: 'Lugares Pet-Friendly', icon: MapPin },
     { id: 'partners', label: 'Aliados', icon: Store },
+    { id: 'users', label: 'Usuarios', icon: Users },
     { id: 'pets', label: 'Mascotas', icon: PawPrint },
     { id: 'products', label: 'Productos', icon: Package },
     { id: 'orders', label: 'Pedidos', icon: ShoppingCart },
     { id: 'appointments', label: 'Citas', icon: Calendar },
-    { id: 'locations', label: 'Lugares', icon: MapPin },
     { id: 'payments', label: 'Pagos', icon: DollarSign },
     { id: 'reports', label: 'Reportes', icon: FileText },
     { id: 'notifications', label: 'Notificaciones', icon: Bell },
     { id: 'security', label: 'Seguridad', icon: Shield },
     { id: 'settings', label: 'Configuración', icon: Settings },
   ];
+
+  const renderContent = () => {
+    switch (activeSection) {
+      case 'overview':
+        return (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+              <div className="flex items-center justify-between mb-4">
+                <div className="bg-blue-100 p-3 rounded-lg">
+                  <Users className="h-6 w-6 text-blue-600" />
+                </div>
+                <span className="text-green-600 text-sm font-medium">+12%</span>
+              </div>
+              <h3 className="text-gray-600 text-sm mb-1">Total Usuarios</h3>
+              <p className="text-3xl font-bold text-gray-800">15,847</p>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+              <div className="flex items-center justify-between mb-4">
+                <div className="bg-teal-100 p-3 rounded-lg">
+                  <Store className="h-6 w-6 text-teal-600" />
+                </div>
+                <span className="text-green-600 text-sm font-medium">+8%</span>
+              </div>
+              <h3 className="text-gray-600 text-sm mb-1">Aliados Activos</h3>
+              <p className="text-3xl font-bold text-gray-800">342</p>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+              <div className="flex items-center justify-between mb-4">
+                <div className="bg-purple-100 p-3 rounded-lg">
+                  <PawPrint className="h-6 w-6 text-purple-600" />
+                </div>
+                <span className="text-green-600 text-sm font-medium">+15%</span>
+              </div>
+              <h3 className="text-gray-600 text-sm mb-1">Mascotas Registradas</h3>
+              <p className="text-3xl font-bold text-gray-800">23,456</p>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+              <div className="flex items-center justify-between mb-4">
+                <div className="bg-green-100 p-3 rounded-lg">
+                  <DollarSign className="h-6 w-6 text-green-600" />
+                </div>
+                <span className="text-green-600 text-sm font-medium">+23%</span>
+              </div>
+              <h3 className="text-gray-600 text-sm mb-1">Ingresos Mensuales</h3>
+              <p className="text-3xl font-bold text-gray-800">$45,892</p>
+            </div>
+          </div>
+        );
+
+      case 'promotions':
+        return <PromotionsManager />;
+
+      case 'places':
+        return <PlacesManager />;
+
+      case 'partners':
+        return <PartnersManager />;
+
+      case 'settings':
+        return <SettingsManager />;
+
+      default:
+        return (
+          <div className="bg-white rounded-xl shadow-sm p-8 border border-gray-100">
+            <div className="text-center py-12">
+              <div className="bg-gray-100 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4">
+                {React.createElement(
+                  menuItems.find((item) => item.id === activeSection)?.icon || Settings,
+                  { className: 'h-10 w-10 text-gray-400' }
+                )}
+              </div>
+              <h3 className="text-xl font-semibold text-gray-800 mb-2">
+                Sección en Desarrollo
+              </h3>
+              <p className="text-gray-600">
+                Esta funcionalidad se conectará con las tablas de la base de datos existente.
+              </p>
+            </div>
+          </div>
+        );
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -58,7 +149,7 @@ const AdminDashboard = () => {
             </div>
           </div>
 
-          <nav className="p-4 space-y-1">
+          <nav className="p-4 space-y-1 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 220px)' }}>
             {menuItems.map((item) => {
               const Icon = item.icon;
               return (
@@ -72,7 +163,7 @@ const AdminDashboard = () => {
                   }`}
                 >
                   <Icon className="h-5 w-5" />
-                  <span className="font-medium">{item.label}</span>
+                  <span className="font-medium text-sm">{item.label}</span>
                 </button>
               );
             })}
@@ -104,72 +195,7 @@ const AdminDashboard = () => {
               </p>
             </div>
 
-            {activeSection === 'overview' && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="bg-blue-100 p-3 rounded-lg">
-                      <Users className="h-6 w-6 text-blue-600" />
-                    </div>
-                    <span className="text-green-600 text-sm font-medium">+12%</span>
-                  </div>
-                  <h3 className="text-gray-600 text-sm mb-1">Total Usuarios</h3>
-                  <p className="text-3xl font-bold text-gray-800">15,847</p>
-                </div>
-
-                <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="bg-teal-100 p-3 rounded-lg">
-                      <Store className="h-6 w-6 text-teal-600" />
-                    </div>
-                    <span className="text-green-600 text-sm font-medium">+8%</span>
-                  </div>
-                  <h3 className="text-gray-600 text-sm mb-1">Aliados Activos</h3>
-                  <p className="text-3xl font-bold text-gray-800">342</p>
-                </div>
-
-                <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="bg-purple-100 p-3 rounded-lg">
-                      <PawPrint className="h-6 w-6 text-purple-600" />
-                    </div>
-                    <span className="text-green-600 text-sm font-medium">+15%</span>
-                  </div>
-                  <h3 className="text-gray-600 text-sm mb-1">Mascotas Registradas</h3>
-                  <p className="text-3xl font-bold text-gray-800">23,456</p>
-                </div>
-
-                <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="bg-green-100 p-3 rounded-lg">
-                      <DollarSign className="h-6 w-6 text-green-600" />
-                    </div>
-                    <span className="text-green-600 text-sm font-medium">+23%</span>
-                  </div>
-                  <h3 className="text-gray-600 text-sm mb-1">Ingresos Mensuales</h3>
-                  <p className="text-3xl font-bold text-gray-800">$45,892</p>
-                </div>
-              </div>
-            )}
-
-            {activeSection !== 'overview' && (
-              <div className="bg-white rounded-xl shadow-sm p-8 border border-gray-100">
-                <div className="text-center py-12">
-                  <div className="bg-gray-100 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4">
-                    {React.createElement(
-                      menuItems.find((item) => item.id === activeSection)?.icon || Settings,
-                      { className: 'h-10 w-10 text-gray-400' }
-                    )}
-                  </div>
-                  <h3 className="text-xl font-semibold text-gray-800 mb-2">
-                    Sección en Desarrollo
-                  </h3>
-                  <p className="text-gray-600">
-                    Esta funcionalidad se conectará con las tablas de la base de datos existente.
-                  </p>
-                </div>
-              </div>
-            )}
+            {renderContent()}
           </div>
         </main>
       </div>
