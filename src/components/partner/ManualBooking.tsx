@@ -147,14 +147,54 @@ const ManualBooking = () => {
         return;
       }
 
-      const { data: bookings, error: bookingsError } = await supabase
+      const { data: ordersData, error: ordersError } = await supabase
+        .from('orders')
+        .select(`
+          appointment_time,
+          service_id,
+          partner_services!inner(duration)
+        `)
+        .eq('partner_id', partnerId)
+        .eq('appointment_date', date + 'T00:00:00+00:00')
+        .neq('status', 'cancelled');
+
+      if (ordersError) throw ordersError;
+
+      const { data: bookingsData, error: bookingsError } = await supabase
         .from('bookings')
-        .select('time, end_time')
+        .select('time, end_time, service_duration')
         .eq('partner_id', partnerId)
         .eq('date', date)
         .neq('status', 'cancelled');
 
       if (bookingsError) throw bookingsError;
+
+      const existingBookings = [
+        ...(ordersData?.map(order => {
+          const duration = (order.partner_services as any)?.duration || 60;
+          const [hours, minutes] = order.appointment_time.split(':').map(Number);
+          const startMinutes = hours * 60 + minutes;
+          const endMinutes = startMinutes + duration;
+
+          return {
+            startMinutes,
+            endMinutes,
+            time: order.appointment_time
+          };
+        }) || []),
+        ...(bookingsData?.map(booking => {
+          const [hours, minutes] = booking.time.split(':').map(Number);
+          const startMinutes = hours * 60 + minutes;
+          const [endHours, endMinutes] = booking.end_time.split(':').map(Number);
+          const endMinutesTotal = endHours * 60 + endMinutes;
+
+          return {
+            startMinutes,
+            endMinutes: endMinutesTotal,
+            time: booking.time
+          };
+        }) || [])
+      ];
 
       const slots: TimeSlot[] = [];
       const serviceDuration = selectedService.duration || 60;
@@ -171,23 +211,12 @@ const ManualBooking = () => {
         const timeStr = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
 
         const slotEndMinutes = currentMinutes + serviceDuration;
-        const slotEndHour = Math.floor(slotEndMinutes / 60);
-        const slotEndMinute = slotEndMinutes % 60;
-        const slotEndTime = `${String(slotEndHour).padStart(2, '0')}:${String(slotEndMinute).padStart(2, '0')}`;
 
-        const isAvailable = !bookings?.some(booking => {
-          const bookingStart = booking.time;
-          const bookingEnd = booking.end_time;
-
-          if (!bookingStart || !bookingEnd) return false;
-
-          const bookingStartMinutes = parseInt(bookingStart.split(':')[0]) * 60 + parseInt(bookingStart.split(':')[1]);
-          const bookingEndMinutes = parseInt(bookingEnd.split(':')[0]) * 60 + parseInt(bookingEnd.split(':')[1]);
-
+        const isAvailable = !existingBookings.some(booking => {
           return (
-            (currentMinutes >= bookingStartMinutes && currentMinutes < bookingEndMinutes) ||
-            (slotEndMinutes > bookingStartMinutes && slotEndMinutes <= bookingEndMinutes) ||
-            (currentMinutes <= bookingStartMinutes && slotEndMinutes >= bookingEndMinutes)
+            (currentMinutes >= booking.startMinutes && currentMinutes < booking.endMinutes) ||
+            (slotEndMinutes > booking.startMinutes && slotEndMinutes <= booking.endMinutes) ||
+            (currentMinutes <= booking.startMinutes && slotEndMinutes >= booking.endMinutes)
           );
         });
 
