@@ -62,7 +62,7 @@ Deno.serve(async (req: Request) => {
     const mpConfig = configData.value;
     const accessToken = mpConfig.access_token;
 
-    const paymentId = notification.data.id;
+    const paymentId = String(notification.data.id);
     const paymentResponse = await fetch(
       `https://api.mercadopago.com/v1/payments/${paymentId}`,
       {
@@ -85,6 +85,7 @@ Deno.serve(async (req: Request) => {
 
     const paymentData = await paymentResponse.json();
     console.log("Payment data:", paymentData);
+    console.log("Payment ID:", paymentId);
 
     const bookingId = paymentData.external_reference;
     const paymentStatus = paymentData.status;
