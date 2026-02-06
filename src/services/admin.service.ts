@@ -572,6 +572,55 @@ export const bookingsService = {
       };
 
       await createOrUpdateOrder(bookingWithCommission);
+
+      const reservationDate = new Date(data.date);
+      const dateFormatted = reservationDate.toLocaleDateString('es-UY', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+      });
+
+      const { data: orderData } = await supabase
+        .from('orders')
+        .select('order_number')
+        .eq('booking_id', data.id)
+        .maybeSingle();
+
+      const orderNumber = orderData?.order_number || data.order_number || `RES-${String(data.id).padStart(9, '0')}`;
+
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const emailPayload = {
+          template_name: 'agenda_confirmation',
+          recipient_email: data.customer_email,
+          order_id: data.id.toString(),
+          wait_for_invoice: true,
+          data: {
+            client_name: data.customer_name,
+            order_number: orderNumber,
+            service_name: data.service_name,
+            provider_name: data.partner_name,
+            reservation_date: dateFormatted,
+            reservation_time: data.time,
+            pet_name: data.pet_name
+          }
+        };
+
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        await fetch(
+          `${supabaseUrl}/functions/v1/send-email`,
+          {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${session?.access_token}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(emailPayload),
+          }
+        );
+      } catch (emailError) {
+        console.error('Error sending confirmation email:', emailError);
+      }
     }
 
     return data as Booking;
