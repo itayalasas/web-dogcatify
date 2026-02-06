@@ -221,12 +221,20 @@ const ManualBooking = ({ onBookingCreated }: ManualBookingProps) => {
       const startMinutes = startHour * 60 + startMinute;
       const endMinutes = endHour * 60 + endMinute;
 
+      const isToday = new Date(date).toDateString() === new Date().toDateString();
+      const now = new Date();
+      const currentMinutesOfDay = isToday ? (now.getHours() * 60 + now.getMinutes()) : 0;
+
       for (let currentMinutes = startMinutes; currentMinutes + serviceDuration <= endMinutes; currentMinutes += serviceDuration) {
         const hour = Math.floor(currentMinutes / 60);
         const minute = currentMinutes % 60;
         const timeStr = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
 
         const slotEndMinutes = currentMinutes + serviceDuration;
+
+        if (isToday && currentMinutes <= currentMinutesOfDay) {
+          continue;
+        }
 
         const isAvailable = !existingBookings.some(booking => {
           return (
