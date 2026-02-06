@@ -502,16 +502,23 @@ const ManualBooking = ({ onBookingCreated }: ManualBookingProps) => {
           showNotification('warning', 'No se pudo generar el link de pago automáticamente');
         }
 
-        const expiresDate = new Date();
-        expiresDate.setDate(expiresDate.getDate() + 1);
-        const expiresFormatted = expiresDate.toLocaleDateString('es-UY', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        const reservationDate = new Date(formData.date);
+        const dateFormatted = reservationDate.toLocaleDateString('es-UY', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric'
+        });
 
-        const amountFormatted = selectedService.price.toLocaleString('es-UY', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const { data: orderData } = await supabase
+          .from('orders')
+          .select('order_number')
+          .eq('booking_id', newBooking.id)
+          .maybeSingle();
 
-        const orderNumber = `RES-${String(newBooking.id).padStart(9, '0')}`;
+        const orderNumber = orderData?.order_number || `RES-${String(newBooking.id).padStart(9, '0')}`;
 
         const emailPayload = {
-          template_name: 'payment_link',
+          template_name: 'agenda_confirmation',
           recipient_email: formData.customer_email,
           order_id: newBooking.id.toString(),
           wait_for_invoice: false,
@@ -519,13 +526,12 @@ const ManualBooking = ({ onBookingCreated }: ManualBookingProps) => {
             client_name: formData.customer_name,
             order_number: orderNumber,
             service_name: selectedService.name,
-            amount: amountFormatted,
-            currency: 'UYU',
+            provider_name: partnerName,
+            reservation_date: dateFormatted,
+            reservation_time: formData.time,
+            pet_name: formData.pet_name || pets.find(p => p.id === formData.pet_id)?.name,
             payment_url: paymentUrl || 'Pendiente de generar',
-            expires_at: expiresFormatted,
-            appointment_time: formData.time,
-            support_email: 'soporte@dogcatify.com',
-            year: new Date().getFullYear().toString()
+            payment_pending: true
           }
         };
 
@@ -543,7 +549,7 @@ const ManualBooking = ({ onBookingCreated }: ManualBookingProps) => {
           );
 
           if (emailResponse.ok) {
-            showNotification('success', 'Cita creada y email enviado al cliente');
+            showNotification('success', 'Cita creada y email con link de pago enviado al cliente');
           } else {
             showNotification('success', 'Cita creada (error al enviar email)');
           }
