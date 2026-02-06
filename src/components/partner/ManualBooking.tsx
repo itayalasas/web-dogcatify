@@ -128,43 +128,79 @@ const ManualBooking = () => {
       const selectedService = services.find(s => s.id === serviceId);
       if (!selectedService) return;
 
-      const { data: bookings, error } = await supabase
+      const selectedDate = new Date(date + 'T00:00:00');
+      const dayOfWeek = selectedDate.getDay();
+
+      const { data: schedule, error: scheduleError } = await supabase
+        .from('business_schedule')
+        .select('start_time, end_time')
+        .eq('partner_id', partnerId)
+        .eq('day_of_week', dayOfWeek)
+        .eq('is_active', true)
+        .maybeSingle();
+
+      if (scheduleError) throw scheduleError;
+
+      if (!schedule) {
+        showNotification('warning', 'No hay horario configurado para este día');
+        setAvailableTimeSlots([]);
+        return;
+      }
+
+      const { data: bookings, error: bookingsError } = await supabase
         .from('bookings')
-        .select('time, end_time, service_duration')
+        .select('time, end_time')
         .eq('partner_id', partnerId)
         .eq('date', date)
         .neq('status', 'cancelled');
 
-      if (error) throw error;
+      if (bookingsError) throw bookingsError;
 
       const slots: TimeSlot[] = [];
-      const startHour = 8;
-      const endHour = 20;
-      const duration = selectedService.duration || 60;
+      const serviceDuration = selectedService.duration || 60;
 
-      for (let hour = startHour; hour < endHour; hour++) {
-        for (let minute = 0; minute < 60; minute += 30) {
-          const timeStr = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+      const [startHour, startMinute] = schedule.start_time.split(':').map(Number);
+      const [endHour, endMinute] = schedule.end_time.split(':').map(Number);
 
-          const isAvailable = !bookings?.some(booking => {
-            const bookingStart = booking.time;
-            const bookingEnd = booking.end_time;
+      const startMinutes = startHour * 60 + startMinute;
+      const endMinutes = endHour * 60 + endMinute;
 
-            if (!bookingStart || !bookingEnd) return false;
+      for (let currentMinutes = startMinutes; currentMinutes + serviceDuration <= endMinutes; currentMinutes += serviceDuration) {
+        const hour = Math.floor(currentMinutes / 60);
+        const minute = currentMinutes % 60;
+        const timeStr = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
 
-            return timeStr >= bookingStart && timeStr < bookingEnd;
-          });
+        const slotEndMinutes = currentMinutes + serviceDuration;
+        const slotEndHour = Math.floor(slotEndMinutes / 60);
+        const slotEndMinute = slotEndMinutes % 60;
+        const slotEndTime = `${String(slotEndHour).padStart(2, '0')}:${String(slotEndMinute).padStart(2, '0')}`;
 
-          slots.push({
-            time: timeStr,
-            available: isAvailable
-          });
-        }
+        const isAvailable = !bookings?.some(booking => {
+          const bookingStart = booking.time;
+          const bookingEnd = booking.end_time;
+
+          if (!bookingStart || !bookingEnd) return false;
+
+          const bookingStartMinutes = parseInt(bookingStart.split(':')[0]) * 60 + parseInt(bookingStart.split(':')[1]);
+          const bookingEndMinutes = parseInt(bookingEnd.split(':')[0]) * 60 + parseInt(bookingEnd.split(':')[1]);
+
+          return (
+            (currentMinutes >= bookingStartMinutes && currentMinutes < bookingEndMinutes) ||
+            (slotEndMinutes > bookingStartMinutes && slotEndMinutes <= bookingEndMinutes) ||
+            (currentMinutes <= bookingStartMinutes && slotEndMinutes >= bookingEndMinutes)
+          );
+        });
+
+        slots.push({
+          time: timeStr,
+          available: isAvailable
+        });
       }
 
       setAvailableTimeSlots(slots);
     } catch (error: any) {
       console.error('Error loading time slots:', error);
+      showNotification('error', 'Error al cargar horarios disponibles');
     }
   };
 
