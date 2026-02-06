@@ -505,15 +505,44 @@ const ManualBooking = ({ onBookingCreated }: ManualBookingProps) => {
         if (paymentUrl) {
           try {
             const { data: { session } } = await supabase.auth.getSession();
+
+            const { data: orderData } = await supabase
+              .from('orders')
+              .select('order_number')
+              .eq('booking_id', newBooking.id)
+              .maybeSingle();
+
+            const orderNumber = orderData?.order_number || `RES-${String(newBooking.id).padStart(9, '0')}`;
+
+            const expiresDate = new Date();
+            expiresDate.setHours(expiresDate.getHours() + 24);
+            const expiresFormatted = expiresDate.toLocaleDateString('es-UY', {
+              day: '2-digit',
+              month: '2-digit',
+              year: 'numeric'
+            });
+
+            const amountFormatted = selectedService.price.toLocaleString('es-UY', {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2
+            });
+
             const emailPayload = {
               template_name: 'payment_link',
               recipient_email: formData.customer_email,
+              order_id: newBooking.id.toString(),
+              wait_for_invoice: false,
               data: {
                 client_name: formData.customer_name,
+                order_number: orderNumber,
                 service_name: selectedService.name,
-                provider_name: partnerName,
+                appointment_time: formData.time,
+                amount: amountFormatted,
+                currency: 'UYU',
                 payment_url: paymentUrl,
-                pet_name: formData.pet_name || pets.find(p => p.id === formData.pet_id)?.name
+                expires_at: expiresFormatted,
+                support_email: 'soporte@dogcatify.com',
+                year: new Date().getFullYear().toString()
               }
             };
 
