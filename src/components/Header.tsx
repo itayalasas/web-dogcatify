@@ -33,9 +33,12 @@ const Header = () => {
             >
               Términos
             </Link>
-            <button className="bg-teal-600 text-white px-6 py-2 rounded-full hover:bg-teal-700 transition-colors">
+            <Link
+              to="/login"
+              className="bg-teal-600 text-white px-6 py-2 rounded-full hover:bg-teal-700 transition-colors"
+            >
               Iniciar Sesión
-            </button>
+            </Link>
           </nav>
 
           {/* Mobile menu button */}
@@ -67,9 +70,12 @@ const Header = () => {
               >
                 Términos
               </Link>
-              <button className="bg-teal-600 text-white px-6 py-2 rounded-full hover:bg-teal-700 transition-colors w-fit">
+              <Link
+                to="/login"
+                className="bg-teal-600 text-white px-6 py-2 rounded-full hover:bg-teal-700 transition-colors w-fit text-center"
+              >
                 Iniciar Sesión
-              </button>
+              </Link>
             </nav>
           </div>
         )}
