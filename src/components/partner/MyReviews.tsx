@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { partnerReviewsService } from '../../services/partner.service';
 import { ServiceReview } from '../../services/admin.service';
 import { useAuth } from '../../contexts/AuthContext';
+import { supabase } from '../../lib/supabase';
 import { Star } from 'lucide-react';
 
 const MyReviews = () => {
@@ -9,20 +10,47 @@ const MyReviews = () => {
   const [reviews, setReviews] = useState<ServiceReview[]>([]);
   const [stats, setStats] = useState({ total: 0, avgRating: '0' });
   const [loading, setLoading] = useState(true);
+  const [partnerId, setPartnerId] = useState<string | null>(null);
 
   useEffect(() => {
     if (profile?.id) {
-      loadReviews();
-      loadStats();
+      loadPartnerData();
     }
   }, [profile]);
 
-  const loadReviews = async () => {
+  const loadPartnerData = async () => {
     if (!profile?.id) return;
 
     try {
+      const { data: partner, error } = await supabase
+        .from('partners')
+        .select('id')
+        .eq('user_id', profile.id)
+        .maybeSingle();
+
+      if (error) throw error;
+
+      if (partner) {
+        setPartnerId(partner.id);
+        loadReviews(partner.id);
+        loadStats(partner.id);
+      } else {
+        console.error('No partner found for user');
+        setLoading(false);
+      }
+    } catch (error) {
+      console.error('Error loading partner data:', error);
+      setLoading(false);
+    }
+  };
+
+  const loadReviews = async (partnerIdToLoad?: string) => {
+    const idToUse = partnerIdToLoad || partnerId;
+    if (!idToUse) return;
+
+    try {
       setLoading(true);
-      const data = await partnerReviewsService.getMyReviews(profile.id);
+      const data = await partnerReviewsService.getMyReviews(idToUse);
       setReviews(data);
     } catch (error) {
       console.error('Error loading reviews:', error);
@@ -31,11 +59,12 @@ const MyReviews = () => {
     }
   };
 
-  const loadStats = async () => {
-    if (!profile?.id) return;
+  const loadStats = async (partnerIdToLoad?: string) => {
+    const idToUse = partnerIdToLoad || partnerId;
+    if (!idToUse) return;
 
     try {
-      const data = await partnerReviewsService.getStats(profile.id);
+      const data = await partnerReviewsService.getStats(idToUse);
       setStats(data);
     } catch (error) {
       console.error('Error loading stats:', error);

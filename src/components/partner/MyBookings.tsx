@@ -2,25 +2,53 @@ import React, { useState, useEffect } from 'react';
 import { partnerBookingsService } from '../../services/partner.service';
 import { Booking } from '../../services/admin.service';
 import { useAuth } from '../../contexts/AuthContext';
+import { supabase } from '../../lib/supabase';
 import { Calendar, CheckCircle, Clock, XCircle, AlertCircle } from 'lucide-react';
 
 const MyBookings = () => {
   const { profile } = useAuth();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
+  const [partnerId, setPartnerId] = useState<string | null>(null);
 
   useEffect(() => {
     if (profile?.id) {
-      loadBookings();
+      loadPartnerData();
     }
   }, [profile]);
 
-  const loadBookings = async () => {
+  const loadPartnerData = async () => {
     if (!profile?.id) return;
 
     try {
+      const { data: partner, error } = await supabase
+        .from('partners')
+        .select('id')
+        .eq('user_id', profile.id)
+        .maybeSingle();
+
+      if (error) throw error;
+
+      if (partner) {
+        setPartnerId(partner.id);
+        loadBookings(partner.id);
+      } else {
+        console.error('No partner found for user');
+        setLoading(false);
+      }
+    } catch (error) {
+      console.error('Error loading partner data:', error);
+      setLoading(false);
+    }
+  };
+
+  const loadBookings = async (partnerIdToLoad?: string) => {
+    const idToUse = partnerIdToLoad || partnerId;
+    if (!idToUse) return;
+
+    try {
       setLoading(true);
-      const data = await partnerBookingsService.getMyBookings(profile.id);
+      const data = await partnerBookingsService.getMyBookings(idToUse);
       setBookings(data);
     } catch (error) {
       console.error('Error loading bookings:', error);

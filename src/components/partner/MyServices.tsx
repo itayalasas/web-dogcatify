@@ -2,25 +2,52 @@ import React, { useState, useEffect } from 'react';
 import { partnerServicesService } from '../../services/partner.service';
 import { PartnerService } from '../../services/admin.service';
 import { useAuth } from '../../contexts/AuthContext';
+import { supabase } from '../../lib/supabase';
 import { Package, ToggleLeft, ToggleRight, DollarSign } from 'lucide-react';
 
 const MyServices = () => {
   const { profile } = useAuth();
   const [services, setServices] = useState<PartnerService[]>([]);
   const [loading, setLoading] = useState(true);
+  const [partnerId, setPartnerId] = useState<string | null>(null);
 
   useEffect(() => {
     if (profile?.id) {
-      loadServices();
+      loadPartnerData();
     }
   }, [profile]);
 
-  const loadServices = async () => {
+  const loadPartnerData = async () => {
     if (!profile?.id) return;
 
     try {
+      const { data: partner, error } = await supabase
+        .from('partners')
+        .select('id')
+        .eq('user_id', profile.id)
+        .maybeSingle();
+
+      if (error) throw error;
+
+      if (partner) {
+        setPartnerId(partner.id);
+        loadServices(partner.id);
+      } else {
+        console.error('No partner found for user');
+        setLoading(false);
+      }
+    } catch (error) {
+      console.error('Error loading partner data:', error);
+      setLoading(false);
+    }
+  };
+
+  const loadServices = async (partnerIdToLoad: string) => {
+    if (!partnerIdToLoad) return;
+
+    try {
       setLoading(true);
-      const data = await partnerServicesService.getMyServices(profile.id);
+      const data = await partnerServicesService.getMyServices(partnerIdToLoad);
       setServices(data);
     } catch (error) {
       console.error('Error loading services:', error);
