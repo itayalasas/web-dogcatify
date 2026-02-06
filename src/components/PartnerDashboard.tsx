@@ -18,6 +18,7 @@ import {
 import MyBookings from './partner/MyBookings';
 import MyServices from './partner/MyServices';
 import MyReviews from './partner/MyReviews';
+import ManualBooking from './partner/ManualBooking';
 
 const PartnerDashboard = () => {
   const { user, profile, signOut } = useAuth();
@@ -32,6 +33,7 @@ const PartnerDashboard = () => {
   const menuItems = [
     { id: 'overview', label: 'Vista General', icon: TrendingUp },
     { id: 'appointments', label: 'Mis Citas', icon: Calendar },
+    { id: 'new-appointment', label: 'Agendar Cita', icon: Clock },
     { id: 'services', label: 'Mis Servicios', icon: Package },
     { id: 'orders', label: 'Pedidos', icon: ShoppingCart },
     { id: 'clients', label: 'Clientes', icon: Users },
@@ -198,10 +200,11 @@ const PartnerDashboard = () => {
             )}
 
             {activeSection === 'appointments' && <MyBookings />}
+            {activeSection === 'new-appointment' && <ManualBooking />}
             {activeSection === 'services' && <MyServices />}
             {activeSection === 'reviews' && <MyReviews />}
 
-            {!['overview', 'appointments', 'services', 'reviews'].includes(activeSection) && (
+            {!['overview', 'appointments', 'new-appointment', 'services', 'reviews'].includes(activeSection) && (
               <div className="bg-white rounded-xl shadow-sm p-8 border border-gray-100">
                 <div className="text-center py-12">
                   <div className="bg-gray-100 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4">

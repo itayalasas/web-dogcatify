@@ -1,12 +1,27 @@
 import React, { useState, useEffect } from 'react';
 import { petsService, Pet } from '../../services/admin.service';
-import { PawPrint, Dog, Cat, Activity, Trash2 } from 'lucide-react';
+import { PawPrint, Dog, Cat, Activity, Trash2, Edit, X } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { useNotification } from '../../hooks/useNotification';
 
 const PetsManager = () => {
   const [pets, setPets] = useState<Pet[]>([]);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({ total: 0, dogs: 0, cats: 0, others: 0 });
+  const [showModal, setShowModal] = useState(false);
+  const [editingPet, setEditingPet] = useState<Pet | null>(null);
+  const { showNotification, NotificationContainer } = useNotification();
+  const [formData, setFormData] = useState({
+    name: '',
+    species: 'dog',
+    breed: '',
+    age: '',
+    weight: '',
+    gender: 'male',
+    is_neutered: false,
+    has_chip: false,
+    chip_number: ''
+  });
 
   useEffect(() => {
     loadPets();
@@ -34,6 +49,55 @@ const PetsManager = () => {
     }
   };
 
+  const handleEdit = (pet: Pet) => {
+    setEditingPet(pet);
+    setFormData({
+      name: pet.name,
+      species: pet.species || 'dog',
+      breed: pet.breed || '',
+      age: pet.age?.toString() || '',
+      weight: pet.weight?.toString() || '',
+      gender: pet.gender || 'male',
+      is_neutered: pet.is_neutered || false,
+      has_chip: pet.has_chip || false,
+      chip_number: pet.chip_number || ''
+    });
+    setShowModal(true);
+  };
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!editingPet) return;
+
+    try {
+      const { error } = await supabase
+        .from('pets')
+        .update({
+          name: formData.name,
+          species: formData.species,
+          breed: formData.breed || null,
+          age: formData.age ? parseInt(formData.age) : null,
+          weight: formData.weight ? parseFloat(formData.weight) : null,
+          gender: formData.gender,
+          is_neutered: formData.is_neutered,
+          has_chip: formData.has_chip,
+          chip_number: formData.has_chip ? formData.chip_number : null
+        })
+        .eq('id', editingPet.id);
+
+      if (error) throw error;
+
+      setShowModal(false);
+      await loadPets();
+      await loadStats();
+      showNotification('success', 'Mascota actualizada correctamente');
+    } catch (error: any) {
+      console.error('Error updating pet:', error);
+      showNotification('error', 'No se pudo actualizar la mascota. Por favor, intente nuevamente.');
+    }
+  };
+
   const handleDelete = async (id: string, name: string) => {
     if (!confirm(`¿Estás seguro de eliminar a ${name}? Esta acción no se puede deshacer.`)) return;
 
@@ -44,11 +108,12 @@ const PetsManager = () => {
         .eq('id', id);
 
       if (error) throw error;
-      loadPets();
-      loadStats();
-    } catch (error) {
+      await loadPets();
+      await loadStats();
+      showNotification('success', 'Mascota eliminada correctamente');
+    } catch (error: any) {
       console.error('Error deleting pet:', error);
-      alert('Error al eliminar la mascota');
+      showNotification('error', 'No se pudo eliminar la mascota. Por favor, intente nuevamente.');
     }
   };
 
@@ -57,7 +122,9 @@ const PetsManager = () => {
   }
 
   return (
-    <div>
+    <>
+      <NotificationContainer />
+      <div>
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
         <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
           <p className="text-sm text-gray-600">Total Mascotas</p>
@@ -123,10 +190,17 @@ const PetsManager = () => {
                 <div className="text-blue-600">✓ Con microchip{pet.chip_number && `: ${pet.chip_number}`}</div>
               )}
             </div>
-            <div className="mt-3 pt-3 border-t border-gray-200">
+            <div className="mt-3 pt-3 border-t border-gray-200 flex gap-2">
+              <button
+                onClick={() => handleEdit(pet)}
+                className="flex-1 flex items-center justify-center px-3 py-2 bg-teal-50 text-teal-600 rounded hover:bg-teal-100 transition-colors text-sm"
+              >
+                <Edit className="h-4 w-4 mr-2" />
+                Editar
+              </button>
               <button
                 onClick={() => handleDelete(pet.id, pet.name)}
-                className="w-full flex items-center justify-center px-3 py-2 bg-red-50 text-red-600 rounded hover:bg-red-100 transition-colors text-sm"
+                className="flex-1 flex items-center justify-center px-3 py-2 bg-red-50 text-red-600 rounded hover:bg-red-100 transition-colors text-sm"
               >
                 <Trash2 className="h-4 w-4 mr-2" />
                 Eliminar
@@ -135,7 +209,146 @@ const PetsManager = () => {
           </div>
         ))}
       </div>
+
+      {showModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-bold text-gray-800">Editar Mascota</h2>
+                <button onClick={() => setShowModal(false)} className="text-gray-500 hover:text-gray-700">
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+
+              <form onSubmit={handleSave} className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Nombre *</label>
+                    <input
+                      type="text"
+                      value={formData.name}
+                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                      required
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Especie *</label>
+                    <select
+                      value={formData.species}
+                      onChange={(e) => setFormData({ ...formData, species: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                    >
+                      <option value="dog">Perro</option>
+                      <option value="cat">Gato</option>
+                      <option value="other">Otro</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Raza</label>
+                    <input
+                      type="text"
+                      value={formData.breed}
+                      onChange={(e) => setFormData({ ...formData, breed: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Género</label>
+                    <select
+                      value={formData.gender}
+                      onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                    >
+                      <option value="male">Macho</option>
+                      <option value="female">Hembra</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Edad (años)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={formData.age}
+                      onChange={(e) => setFormData({ ...formData, age: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Peso (kg)</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      value={formData.weight}
+                      onChange={(e) => setFormData({ ...formData, weight: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      checked={formData.is_neutered}
+                      onChange={(e) => setFormData({ ...formData, is_neutered: e.target.checked })}
+                      className="rounded text-teal-600 focus:ring-teal-500"
+                    />
+                    <span className="text-sm text-gray-700">Esterilizado</span>
+                  </label>
+
+                  <label className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      checked={formData.has_chip}
+                      onChange={(e) => setFormData({ ...formData, has_chip: e.target.checked })}
+                      className="rounded text-teal-600 focus:ring-teal-500"
+                    />
+                    <span className="text-sm text-gray-700">Tiene microchip</span>
+                  </label>
+
+                  {formData.has_chip && (
+                    <div className="ml-6">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Número de Chip</label>
+                      <input
+                        type="text"
+                        value={formData.chip_number}
+                        onChange={(e) => setFormData({ ...formData, chip_number: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                      />
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex gap-3 mt-6">
+                  <button
+                    type="button"
+                    onClick={() => setShowModal(false)}
+                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors"
+                  >
+                    Guardar Cambios
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
+    </>
   );
 };
 

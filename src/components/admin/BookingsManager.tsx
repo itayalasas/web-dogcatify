@@ -1,12 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { bookingsService, Booking } from '../../services/admin.service';
-import { Calendar, CheckCircle, Clock, XCircle, AlertCircle } from 'lucide-react';
+import { Calendar, CheckCircle, Clock, XCircle, AlertCircle, Edit, Trash2, X } from 'lucide-react';
 import { useNotification } from '../../hooks/useNotification';
+import { supabase } from '../../lib/supabase';
 
 const BookingsManager = () => {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showModal, setShowModal] = useState(false);
+  const [editingBooking, setEditingBooking] = useState<Booking | null>(null);
   const { showNotification, NotificationContainer } = useNotification();
+  const [formData, setFormData] = useState({
+    date: '',
+    time: '',
+    status: 'pending',
+    notes: ''
+  });
 
   useEffect(() => {
     loadBookings();
@@ -24,6 +33,44 @@ const BookingsManager = () => {
     }
   };
 
+  const handleEdit = (booking: Booking) => {
+    setEditingBooking(booking);
+    setFormData({
+      date: booking.date ? new Date(booking.date).toISOString().split('T')[0] : '',
+      time: booking.time || '',
+      status: booking.status || 'pending',
+      notes: booking.notes || ''
+    });
+    setShowModal(true);
+  };
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!editingBooking) return;
+
+    try {
+      const { error } = await supabase
+        .from('bookings')
+        .update({
+          date: formData.date,
+          time: formData.time,
+          status: formData.status,
+          notes: formData.notes
+        })
+        .eq('id', editingBooking.id);
+
+      if (error) throw error;
+
+      setShowModal(false);
+      await loadBookings();
+      showNotification('success', 'Cita actualizada correctamente');
+    } catch (error: any) {
+      console.error('Error updating booking:', error);
+      showNotification('error', 'No se pudo actualizar la cita. Por favor, intente nuevamente.');
+    }
+  };
+
   const handleUpdateStatus = async (id: string, status: string) => {
     try {
       await bookingsService.updateStatus(id, status);
@@ -33,6 +80,24 @@ const BookingsManager = () => {
       console.error('Error updating booking:', error);
       const errorMessage = error?.message || 'No se pudo actualizar el estado de la cita. Por favor, intente nuevamente.';
       showNotification('error', errorMessage);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('¿Estás seguro de eliminar esta cita? Esta acción no se puede deshacer.')) return;
+
+    try {
+      const { error } = await supabase
+        .from('bookings')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+      await loadBookings();
+      showNotification('success', 'Cita eliminada correctamente');
+    } catch (error: any) {
+      console.error('Error deleting booking:', error);
+      showNotification('error', 'No se pudo eliminar la cita. Por favor, intente nuevamente.');
     }
   };
 
@@ -103,17 +168,33 @@ const BookingsManager = () => {
                   </td>
                   <td className="px-6 py-4">{getStatusBadge(booking.status)}</td>
                   <td className="px-6 py-4">
-                    <select
-                      value={booking.status}
-                      onChange={(e) => handleUpdateStatus(booking.id, e.target.value)}
-                      className="text-xs border border-gray-300 rounded px-2 py-1"
-                    >
-                      <option value="pending">Pendiente</option>
-                      <option value="confirmed">Confirmado</option>
-                      <option value="in_progress">En Progreso</option>
-                      <option value="completed">Completado</option>
-                      <option value="cancelled">Cancelado</option>
-                    </select>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleEdit(booking)}
+                        className="p-1 bg-teal-50 text-teal-600 rounded hover:bg-teal-100 transition-colors"
+                        title="Editar"
+                      >
+                        <Edit className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(booking.id)}
+                        className="p-1 bg-red-50 text-red-600 rounded hover:bg-red-100 transition-colors"
+                        title="Eliminar"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                      <select
+                        value={booking.status}
+                        onChange={(e) => handleUpdateStatus(booking.id, e.target.value)}
+                        className="text-xs border border-gray-300 rounded px-2 py-1"
+                      >
+                        <option value="pending">Pendiente</option>
+                        <option value="confirmed">Confirmado</option>
+                        <option value="in_progress">En Progreso</option>
+                        <option value="completed">Completado</option>
+                        <option value="cancelled">Cancelado</option>
+                      </select>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -125,6 +206,88 @@ const BookingsManager = () => {
       {bookings.length === 0 && (
         <div className="text-center py-12 text-gray-500">
           No hay citas registradas
+        </div>
+      )}
+
+      {showModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-2xl w-full">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-bold text-gray-800">Editar Cita</h2>
+                <button onClick={() => setShowModal(false)} className="text-gray-500 hover:text-gray-700">
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+
+              <form onSubmit={handleSave} className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Fecha *</label>
+                    <input
+                      type="date"
+                      value={formData.date}
+                      onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                      required
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Hora *</label>
+                    <input
+                      type="time"
+                      value={formData.time}
+                      onChange={(e) => setFormData({ ...formData, time: e.target.value })}
+                      required
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Estado *</label>
+                    <select
+                      value={formData.status}
+                      onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                    >
+                      <option value="pending">Pendiente</option>
+                      <option value="confirmed">Confirmado</option>
+                      <option value="in_progress">En Progreso</option>
+                      <option value="completed">Completado</option>
+                      <option value="cancelled">Cancelado</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Notas</label>
+                  <textarea
+                    value={formData.notes}
+                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                    rows={3}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                  />
+                </div>
+
+                <div className="flex gap-3 mt-6">
+                  <button
+                    type="button"
+                    onClick={() => setShowModal(false)}
+                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors"
+                  >
+                    Guardar Cambios
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
         </div>
       )}
     </div>

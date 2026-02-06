@@ -22,12 +22,22 @@ const OrdersManager = () => {
     let filtered = orders;
 
     if (searchTerm) {
-      filtered = filtered.filter(order =>
-        order.customer_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        order.customer_email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        order.partner_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        order.order_number?.toLowerCase().includes(searchTerm.toLowerCase())
-      );
+      const searchLower = searchTerm.toLowerCase();
+      filtered = filtered.filter(order => {
+        const orderNumber = (order.order_number || order.id.slice(0, 8)).toLowerCase();
+        const customerName = order.customer_name?.toLowerCase() || '';
+        const customerEmail = order.customer_email?.toLowerCase() || '';
+        const partnerName = order.partner_name?.toLowerCase() || '';
+        const amount = order.total_amount?.toString() || '';
+        const date = order.created_at ? new Date(order.created_at).toLocaleDateString('es-ES') : '';
+
+        return orderNumber.includes(searchLower) ||
+               customerName.includes(searchLower) ||
+               customerEmail.includes(searchLower) ||
+               partnerName.includes(searchLower) ||
+               amount.includes(searchLower) ||
+               date.includes(searchLower);
+      });
     }
 
     if (statusFilter !== 'all') {
@@ -120,7 +130,7 @@ const OrdersManager = () => {
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
           <input
             type="text"
-            placeholder="Buscar por cliente, partner o número de orden..."
+            placeholder="Buscar por pedido, cliente, partner, monto o fecha..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
