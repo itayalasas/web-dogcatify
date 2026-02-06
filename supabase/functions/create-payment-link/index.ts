@@ -140,11 +140,14 @@ Deno.serve(async (req: Request) => {
 
     const data = await response.json();
 
+    const initPoint = mpConfig.is_test_mode ? data.sandbox_init_point : data.init_point;
+
     return new Response(
       JSON.stringify({
         preferenceId: data.id,
-        initPoint: data.init_point,
+        initPoint: initPoint,
         sandboxInitPoint: data.sandbox_init_point,
+        isTestMode: mpConfig.is_test_mode,
       }),
       {
         status: 200,

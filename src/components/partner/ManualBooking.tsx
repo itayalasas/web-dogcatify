@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Calendar, Clock, User, Phone, Mail, PawPrint, DollarSign, Plus, Search, X } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useNotification } from '../../hooks/useNotification';
@@ -34,6 +35,7 @@ interface TimeSlot {
 
 const ManualBooking = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const { showNotification, NotificationContainer } = useNotification();
   const [services, setServices] = useState<Service[]>([]);
   const [pets, setPets] = useState<Pet[]>([]);
@@ -533,8 +535,16 @@ const ManualBooking = () => {
         if (paymentUrl) {
           window.open(paymentUrl, '_blank');
         }
+
+        setTimeout(() => {
+          navigate('/partner/bookings');
+        }, 2000);
       } else {
         showNotification('success', 'Cita agendada correctamente');
+
+        setTimeout(() => {
+          navigate('/partner/bookings');
+        }, 2000);
       }
 
       setFormData({
