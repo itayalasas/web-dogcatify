@@ -406,7 +406,9 @@ const ManualBooking = () => {
         return;
       }
 
-      const { error: bookingError } = await supabase
+      const isPaymentLink = formData.payment_method === 'payment_link';
+
+      const { data: newBooking, error: bookingError } = await supabase
         .from('bookings')
         .insert({
           partner_id: partnerId,
@@ -422,17 +424,59 @@ const ManualBooking = () => {
           date: formData.date,
           time: startTime,
           end_time: endTime,
-          status: 'confirmed',
+          status: isPaymentLink ? 'pending' : 'confirmed',
           total_amount: selectedService.price,
-          payment_status: 'approved',
+          payment_status: isPaymentLink ? 'pending' : 'approved',
           payment_method: formData.payment_method,
-          payment_confirmed_at: new Date().toISOString(),
+          payment_confirmed_at: isPaymentLink ? null : new Date().toISOString(),
           notes: formData.notes
-        });
+        })
+        .select()
+        .single();
 
       if (bookingError) throw bookingError;
 
-      showNotification('success', 'Cita agendada correctamente');
+      if (isPaymentLink) {
+        const { data: { session } } = await supabase.auth.getSession();
+
+        const response = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-payment-link`,
+          {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${session?.access_token}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              bookingId: newBooking.id,
+              amount: selectedService.price,
+              description: `${selectedService.name} - ${formData.customer_name}`,
+              customerEmail: formData.customer_email,
+              customerName: formData.customer_name,
+            }),
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error('Error al generar el link de pago');
+        }
+
+        const paymentData = await response.json();
+
+        await supabase
+          .from('bookings')
+          .update({
+            payment_link: paymentData.initPoint,
+            payment_preference_id: paymentData.preferenceId,
+          })
+          .eq('id', newBooking.id);
+
+        showNotification('success', `Cita creada. Link de pago: ${paymentData.initPoint}`);
+
+        window.open(paymentData.initPoint, '_blank');
+      } else {
+        showNotification('success', 'Cita agendada correctamente');
+      }
 
       setFormData({
         service_id: '',
@@ -718,7 +762,13 @@ const ManualBooking = () => {
                     <option value="cash">Efectivo</option>
                     <option value="card">Tarjeta</option>
                     <option value="transfer">Transferencia</option>
+                    <option value="payment_link">Link de Pago</option>
                   </select>
+                  {formData.payment_method === 'payment_link' && (
+                    <p className="text-xs text-blue-600 mt-1">
+                      Se generará un link de pago de Mercado Pago y se enviará al cliente por email
+                    </p>
+                  )}
                 </div>
 
                 <div className="md:col-span-2">
