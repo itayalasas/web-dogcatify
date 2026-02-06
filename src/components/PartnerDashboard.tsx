@@ -200,7 +200,7 @@ const PartnerDashboard = () => {
             )}
 
             {activeSection === 'appointments' && <MyBookings />}
-            {activeSection === 'new-appointment' && <ManualBooking />}
+            {activeSection === 'new-appointment' && <ManualBooking onBookingCreated={() => setActiveSection('appointments')} />}
             {activeSection === 'services' && <MyServices />}
             {activeSection === 'reviews' && <MyReviews />}
 
