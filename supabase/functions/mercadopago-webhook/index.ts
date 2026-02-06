@@ -163,6 +163,54 @@ Deno.serve(async (req: Request) => {
       } else {
         console.error("WARNING: Order not found for booking:", bookingId, "- Order should have been created when booking was created!");
       }
+
+      const reservationDate = new Date(booking.date);
+      const dateFormatted = reservationDate.toLocaleDateString('es-UY', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+      });
+
+      try {
+        const emailPayload = {
+          template_name: "agenda_confirmation",
+          recipient_email: booking.customer_email,
+          order_id: booking.id.toString(),
+          wait_for_invoice: true,
+          data: {
+            client_name: booking.customer_name,
+            order_number: orderNumber,
+            service_name: booking.service_name,
+            provider_name: booking.partner_name,
+            reservation_date: dateFormatted,
+            reservation_time: booking.time,
+            pet_name: booking.pet_name
+          }
+        };
+
+        console.log("Sending confirmation email to:", booking.customer_email);
+
+        const emailResponse = await fetch(
+          `${supabaseUrl}/functions/v1/send-email`,
+          {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${supabaseServiceKey}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(emailPayload),
+          }
+        );
+
+        if (emailResponse.ok) {
+          console.log("Confirmation email sent successfully");
+        } else {
+          const errorData = await emailResponse.json();
+          console.error("Failed to send confirmation email:", errorData);
+        }
+      } catch (emailError) {
+        console.error("Error sending confirmation email:", emailError);
+      }
     } else if (paymentStatus === "rejected" || paymentStatus === "cancelled") {
       bookingStatus = "cancelled";
       bookingPaymentStatus = paymentStatus;
