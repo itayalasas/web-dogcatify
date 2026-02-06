@@ -438,42 +438,101 @@ const ManualBooking = () => {
 
       if (isPaymentLink) {
         const { data: { session } } = await supabase.auth.getSession();
+        let paymentUrl = '';
 
-        const response = await fetch(
-          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-payment-link`,
-          {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${session?.access_token}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              bookingId: newBooking.id,
-              amount: selectedService.price,
-              description: `${selectedService.name} - ${formData.customer_name}`,
-              customerEmail: formData.customer_email,
-              customerName: formData.customer_name,
-            }),
+        try {
+          const response = await fetch(
+            `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-payment-link`,
+            {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${session?.access_token}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                bookingId: newBooking.id,
+                amount: selectedService.price,
+                description: `${selectedService.name} - ${formData.customer_name}`,
+                customerEmail: formData.customer_email,
+                customerName: formData.customer_name,
+              }),
+            }
+          );
+
+          if (response.ok) {
+            const paymentData = await response.json();
+            paymentUrl = paymentData.initPoint;
+
+            await supabase
+              .from('bookings')
+              .update({
+                payment_link: paymentData.initPoint,
+                payment_preference_id: paymentData.preferenceId,
+              })
+              .eq('id', newBooking.id);
+          } else {
+            const errorData = await response.json();
+            console.error('Error creating payment link:', errorData);
+            showNotification('warning', 'No se pudo generar el link de pago automáticamente');
           }
-        );
-
-        if (!response.ok) {
-          throw new Error('Error al generar el link de pago');
+        } catch (paymentError) {
+          console.error('Error creating payment link:', paymentError);
+          showNotification('warning', 'No se pudo generar el link de pago automáticamente');
         }
 
-        const paymentData = await response.json();
+        const expiresDate = new Date();
+        expiresDate.setDate(expiresDate.getDate() + 1);
+        const expiresFormatted = expiresDate.toLocaleDateString('es-UY', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
-        await supabase
-          .from('bookings')
-          .update({
-            payment_link: paymentData.initPoint,
-            payment_preference_id: paymentData.preferenceId,
-          })
-          .eq('id', newBooking.id);
+        const amountFormatted = selectedService.price.toLocaleString('es-UY', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-        showNotification('success', `Cita creada. Link de pago: ${paymentData.initPoint}`);
+        const orderNumber = `RES-${String(newBooking.id).padStart(9, '0')}`;
 
-        window.open(paymentData.initPoint, '_blank');
+        const emailPayload = {
+          template_name: 'payment_link',
+          recipient_email: formData.customer_email,
+          order_id: newBooking.id.toString(),
+          wait_for_invoice: false,
+          data: {
+            client_name: formData.customer_name,
+            order_number: orderNumber,
+            service_name: selectedService.name,
+            amount: amountFormatted,
+            currency: 'UYU',
+            payment_url: paymentUrl || 'Pendiente de generar',
+            expires_at: expiresFormatted,
+            appointment_time: formData.time,
+            support_email: 'soporte@dogcatify.com',
+            year: new Date().getFullYear().toString()
+          }
+        };
+
+        try {
+          const emailResponse = await fetch(
+            `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-email`,
+            {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${session?.access_token}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(emailPayload),
+            }
+          );
+
+          if (emailResponse.ok) {
+            showNotification('success', 'Cita creada y email enviado al cliente');
+          } else {
+            showNotification('success', 'Cita creada (error al enviar email)');
+          }
+        } catch (emailError) {
+          console.error('Error sending email:', emailError);
+          showNotification('success', 'Cita creada (error al enviar email)');
+        }
+
+        if (paymentUrl) {
+          window.open(paymentUrl, '_blank');
+        }
       } else {
         showNotification('success', 'Cita agendada correctamente');
       }
