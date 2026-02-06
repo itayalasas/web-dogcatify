@@ -1,5 +1,106 @@
 import { supabase } from '../lib/supabase';
 
+const IVA_RATE = 22;
+
+function generatePartnerBreakdown(booking: Booking) {
+  const servicePrice = booking.total_amount || 0;
+  const ivaAmount = (servicePrice * IVA_RATE) / 100;
+  const commissionPercentage = booking.commission_percentage || 5;
+  const commissionAmount = (servicePrice * commissionPercentage) / 100;
+
+  return {
+    iva_rate: IVA_RATE,
+    partners: {
+      [booking.partner_id]: {
+        items: [
+          {
+            id: booking.service_id || booking.id,
+            name: booking.service_name || 'Servicio',
+            price: servicePrice,
+            total: servicePrice,
+            quantity: 1,
+            subtotal: servicePrice,
+            iva_amount: ivaAmount,
+          },
+        ],
+        subtotal: servicePrice,
+        partner_id: booking.partner_id,
+        partner_name: booking.partner_name || 'Partner',
+      },
+    },
+    iva_amount: ivaAmount,
+    iva_included: false,
+    shipping_cost: 0,
+    total_partners: 1,
+    commission_split: commissionAmount,
+  };
+}
+
+async function createOrUpdateOrder(booking: Booking) {
+  const partnerBreakdown = generatePartnerBreakdown(booking);
+  const commissionPercentage = booking.commission_percentage || 5;
+  const commissionAmount = (booking.total_amount * commissionPercentage) / 100;
+  const partnerAmount = booking.total_amount - commissionAmount;
+
+  const { data: existingOrder } = await supabase
+    .from('orders')
+    .select('id')
+    .eq('booking_id', booking.id)
+    .maybeSingle();
+
+  if (existingOrder) {
+    const { error } = await supabase
+      .from('orders')
+      .update({
+        partner_breakdown: partnerBreakdown,
+        status: 'confirmed',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('booking_id', booking.id);
+
+    if (error) throw error;
+  } else {
+    const { error } = await supabase.from('orders').insert({
+      partner_id: booking.partner_id,
+      customer_id: booking.customer_id,
+      booking_id: booking.id,
+      order_type: 'service_booking',
+      service_id: booking.service_id,
+      pet_id: booking.pet_id,
+      status: 'confirmed',
+      total_amount: booking.total_amount,
+      subtotal: booking.total_amount,
+      iva_rate: IVA_RATE,
+      iva_amount: (booking.total_amount * IVA_RATE) / 100,
+      iva_included_in_price: false,
+      shipping_cost: 0,
+      commission_amount: commissionAmount,
+      partner_amount: partnerAmount,
+      partner_breakdown: partnerBreakdown,
+      partner_name: booking.partner_name,
+      service_name: booking.service_name,
+      pet_name: booking.pet_name,
+      customer_name: booking.customer_name,
+      customer_email: booking.customer_email,
+      customer_phone: booking.customer_phone,
+      appointment_date: booking.date,
+      appointment_time: booking.time,
+      payment_method: booking.payment_method || 'pending',
+      payment_status: booking.payment_status || 'pending',
+      items: [
+        {
+          id: booking.service_id || booking.id,
+          name: booking.service_name || 'Servicio',
+          price: booking.total_amount,
+          quantity: 1,
+        },
+      ],
+    });
+
+    if (error) throw error;
+  }
+}
+
 export interface Promotion {
   id: string;
   title: string;
@@ -111,6 +212,7 @@ export interface Booking {
   partner_name: string | null;
   customer_id: string;
   customer_name: string | null;
+  customer_email: string | null;
   customer_phone: string | null;
   pet_id: string | null;
   pet_name: string | null;
@@ -119,6 +221,8 @@ export interface Booking {
   status: string;
   total_amount: number;
   payment_status: string | null;
+  payment_method: string | null;
+  commission_percentage?: number;
   created_at: string | null;
 }
 
@@ -444,6 +548,22 @@ export const bookingsService = {
       .single();
 
     if (error) throw error;
+
+    if (status === 'confirmed' && data) {
+      const { data: partnerData } = await supabase
+        .from('partners')
+        .select('commission_percentage')
+        .eq('id', data.partner_id)
+        .maybeSingle();
+
+      const bookingWithCommission = {
+        ...data,
+        commission_percentage: partnerData?.commission_percentage || 5,
+      } as Booking;
+
+      await createOrUpdateOrder(bookingWithCommission);
+    }
+
     return data as Booking;
   }
 };
