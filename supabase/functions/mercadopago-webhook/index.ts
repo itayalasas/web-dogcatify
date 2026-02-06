@@ -87,15 +87,15 @@ Deno.serve(async (req: Request) => {
     console.log("Payment data:", paymentData);
     console.log("Payment ID:", paymentId);
 
-    const bookingId = paymentData.external_reference;
+    const orderNumber = paymentData.external_reference;
     const paymentStatus = paymentData.status;
     const paymentStatusDetail = paymentData.status_detail;
     const paymentMethod = paymentData.payment_method_id;
 
-    if (!bookingId) {
-      console.error("No booking ID in payment external_reference");
+    if (!orderNumber) {
+      console.error("No order number in payment external_reference");
       return new Response(
-        JSON.stringify({ error: "No booking ID found" }),
+        JSON.stringify({ error: "No order number found" }),
         {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -106,11 +106,11 @@ Deno.serve(async (req: Request) => {
     const { data: booking, error: bookingError } = await supabase
       .from("bookings")
       .select("*")
-      .eq("id", bookingId)
+      .eq("order_number", orderNumber)
       .maybeSingle();
 
     if (bookingError || !booking) {
-      console.error("Booking not found:", bookingId);
+      console.error("Booking not found for order number:", orderNumber);
       return new Response(
         JSON.stringify({ error: "Booking not found" }),
         {
@@ -120,6 +120,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    const bookingId = booking.id;
     let bookingStatus = booking.status;
     let bookingPaymentStatus = paymentStatus;
 
@@ -229,10 +230,10 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    console.log(`Booking ${bookingId} updated. Status: ${bookingStatus}, Payment: ${bookingPaymentStatus}`);
+    console.log(`Booking ${bookingId} (Order: ${orderNumber}) updated. Status: ${bookingStatus}, Payment: ${bookingPaymentStatus}`);
 
     return new Response(
-      JSON.stringify({ ok: true, bookingId, status: bookingStatus }),
+      JSON.stringify({ ok: true, orderNumber, bookingId, status: bookingStatus }),
       {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },

@@ -53,6 +53,28 @@ Deno.serve(async (req: Request) => {
 
     const supabase = createClient(supabaseUrl!, supabaseServiceKey!);
 
+    const { data: booking, error: bookingError } = await supabase
+      .from('bookings')
+      .select('order_number')
+      .eq('id', bookingId)
+      .maybeSingle();
+
+    if (bookingError || !booking) {
+      console.error("Error fetching booking:", bookingError);
+      return new Response(
+        JSON.stringify({ error: "Booking not found" }),
+        {
+          status: 404,
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+    }
+
+    const orderNumber = booking.order_number || bookingId;
+
     const { data: configData, error: configError } = await supabase
       .from('admin_settings')
       .select('value')
@@ -110,7 +132,7 @@ Deno.serve(async (req: Request) => {
       },
       auto_return: "approved",
       notification_url: backUrl,
-      external_reference: bookingId,
+      external_reference: orderNumber,
       statement_descriptor: "DogCatify",
     };
 
