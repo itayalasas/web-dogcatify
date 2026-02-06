@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { petsService, Pet } from '../../services/admin.service';
-import { PawPrint, Dog, Cat, Activity } from 'lucide-react';
+import { PawPrint, Dog, Cat, Activity, Trash2 } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
 
 const PetsManager = () => {
   const [pets, setPets] = useState<Pet[]>([]);
@@ -30,6 +31,24 @@ const PetsManager = () => {
       setStats(data);
     } catch (error) {
       console.error('Error loading stats:', error);
+    }
+  };
+
+  const handleDelete = async (id: string, name: string) => {
+    if (!confirm(`¿Estás seguro de eliminar a ${name}? Esta acción no se puede deshacer.`)) return;
+
+    try {
+      const { error } = await supabase
+        .from('pets')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+      loadPets();
+      loadStats();
+    } catch (error) {
+      console.error('Error deleting pet:', error);
+      alert('Error al eliminar la mascota');
     }
   };
 
@@ -103,6 +122,15 @@ const PetsManager = () => {
               {pet.has_chip && (
                 <div className="text-blue-600">✓ Con microchip{pet.chip_number && `: ${pet.chip_number}`}</div>
               )}
+            </div>
+            <div className="mt-3 pt-3 border-t border-gray-200">
+              <button
+                onClick={() => handleDelete(pet.id, pet.name)}
+                className="w-full flex items-center justify-center px-3 py-2 bg-red-50 text-red-600 rounded hover:bg-red-100 transition-colors text-sm"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Eliminar
+              </button>
             </div>
           </div>
         ))}

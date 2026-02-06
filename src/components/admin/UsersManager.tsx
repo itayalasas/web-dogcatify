@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { usersService, User } from '../../services/admin.service';
-import { Users as UsersIcon, Mail, Phone, MapPin, CheckCircle, XCircle } from 'lucide-react';
+import { Users as UsersIcon, Mail, Phone, MapPin, CheckCircle, XCircle, Trash2 } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
 
 const UsersManager = () => {
   const [users, setUsers] = useState<User[]>([]);
@@ -30,6 +31,24 @@ const UsersManager = () => {
       setStats(data);
     } catch (error) {
       console.error('Error loading stats:', error);
+    }
+  };
+
+  const handleDelete = async (id: string, email: string) => {
+    if (!confirm(`¿Estás seguro de eliminar al usuario ${email}? Esta acción no se puede deshacer.`)) return;
+
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+      loadUsers();
+      loadStats();
+    } catch (error) {
+      console.error('Error deleting user:', error);
+      alert('Error al eliminar el usuario');
     }
   };
 
@@ -68,6 +87,7 @@ const UsersManager = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Roles</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Estado</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Registrado</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Acciones</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -129,6 +149,15 @@ const UsersManager = () => {
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-600">
                     {user.created_at ? new Date(user.created_at).toLocaleDateString() : 'N/A'}
+                  </td>
+                  <td className="px-6 py-4">
+                    <button
+                      onClick={() => handleDelete(user.id, user.email)}
+                      className="text-red-600 hover:text-red-800 transition-colors"
+                      title="Eliminar usuario"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
                   </td>
                 </tr>
               ))}

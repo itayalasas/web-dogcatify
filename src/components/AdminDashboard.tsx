@@ -26,6 +26,10 @@ import UsersManager from './admin/UsersManager';
 import PetsManager from './admin/PetsManager';
 import OrdersManager from './admin/OrdersManager';
 import BookingsManager from './admin/BookingsManager';
+import ProductsManager from './admin/ProductsManager';
+import PaymentsManager from './admin/PaymentsManager';
+import ReportsManager from './admin/ReportsManager';
+import NotificationsManager from './admin/NotificationsManager';
 
 const AdminDashboard = () => {
   const { user, signOut } = useAuth();
@@ -120,11 +124,23 @@ const AdminDashboard = () => {
       case 'pets':
         return <PetsManager />;
 
+      case 'products':
+        return <ProductsManager />;
+
       case 'orders':
         return <OrdersManager />;
 
       case 'appointments':
         return <BookingsManager />;
+
+      case 'payments':
+        return <PaymentsManager />;
+
+      case 'reports':
+        return <ReportsManager />;
+
+      case 'notifications':
+        return <NotificationsManager />;
 
       case 'settings':
         return <SettingsManager />;
