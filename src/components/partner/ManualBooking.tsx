@@ -562,7 +562,60 @@ const ManualBooking = ({ onBookingCreated }: ManualBookingProps) => {
           }
         }, 2000);
       } else {
-        showNotification('success', 'Cita agendada correctamente');
+        const reservationDate = new Date(formData.date);
+        const dateFormatted = reservationDate.toLocaleDateString('es-UY', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric'
+        });
+
+        const { data: orderData } = await supabase
+          .from('orders')
+          .select('order_number')
+          .eq('booking_id', newBooking.id)
+          .maybeSingle();
+
+        const orderNumber = orderData?.order_number || `RES-${String(newBooking.id).padStart(9, '0')}`;
+
+        const emailPayload = {
+          template_name: 'agenda_confirmation',
+          recipient_email: formData.customer_email,
+          order_id: newBooking.id.toString(),
+          wait_for_invoice: true,
+          data: {
+            client_name: formData.customer_name,
+            order_number: orderNumber,
+            service_name: selectedService.name,
+            provider_name: partnerName,
+            reservation_date: dateFormatted,
+            reservation_time: formData.time,
+            pet_name: formData.pet_name || pets.find(p => p.id === formData.pet_id)?.name
+          }
+        };
+
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          const emailResponse = await fetch(
+            `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-email`,
+            {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${session?.access_token}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(emailPayload),
+            }
+          );
+
+          if (emailResponse.ok) {
+            showNotification('success', 'Cita agendada y email de confirmación enviado');
+          } else {
+            showNotification('success', 'Cita agendada (error al enviar email)');
+          }
+        } catch (emailError) {
+          console.error('Error sending confirmation email:', emailError);
+          showNotification('success', 'Cita agendada (error al enviar email)');
+        }
 
         setTimeout(() => {
           if (onBookingCreated) {
