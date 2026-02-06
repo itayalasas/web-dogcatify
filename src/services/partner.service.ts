@@ -55,6 +55,8 @@ async function createOrUpdateOrder(booking: Booking & { payment_preference_id?: 
       .update({
         partner_breakdown: partnerBreakdown,
         status: 'confirmed',
+        commission_amount: commissionAmount,
+        partner_amount: partnerAmount,
         updated_at: new Date().toISOString(),
       })
       .eq('booking_id', booking.id);

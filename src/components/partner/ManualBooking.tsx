@@ -477,6 +477,13 @@ const ManualBooking = ({ onBookingCreated }: ManualBookingProps) => {
                 payment_preference_id: paymentData.preferenceId,
               })
               .eq('id', newBooking.id);
+
+            await supabase
+              .from('orders')
+              .update({
+                payment_preference_id: paymentData.preferenceId,
+              })
+              .eq('booking_id', newBooking.id);
           } else {
             const errorData = await response.json();
             console.error('Error creating payment link:', errorData);
@@ -547,101 +554,6 @@ const ManualBooking = ({ onBookingCreated }: ManualBookingProps) => {
           }
         }, 2000);
       } else {
-        try {
-          const { data: partnerCommission } = await supabase
-            .from('partners')
-            .select('commission_percentage')
-            .eq('id', partnerId)
-            .maybeSingle();
-
-          const bookingWithCommission = {
-            ...newBooking,
-            commission_percentage: partnerCommission?.commission_percentage || 5,
-            payment_preference_id: null,
-            notes: formData.notes,
-            payment_data: null,
-          };
-
-          const IVA_RATE = 22;
-          const commissionPercentage = bookingWithCommission.commission_percentage || 5;
-          const commissionAmount = (bookingWithCommission.total_amount * commissionPercentage) / 100;
-          const partnerAmount = bookingWithCommission.total_amount - commissionAmount;
-          const ivaAmount = (bookingWithCommission.total_amount * IVA_RATE) / 100;
-
-          const partnerBreakdown = {
-            iva_rate: IVA_RATE,
-            partners: {
-              [bookingWithCommission.partner_id]: {
-                items: [
-                  {
-                    id: bookingWithCommission.service_id || bookingWithCommission.id,
-                    name: bookingWithCommission.service_name || 'Servicio',
-                    price: bookingWithCommission.total_amount,
-                    total: bookingWithCommission.total_amount,
-                    quantity: 1,
-                    subtotal: bookingWithCommission.total_amount,
-                    iva_amount: ivaAmount,
-                  },
-                ],
-                subtotal: bookingWithCommission.total_amount,
-                partner_id: bookingWithCommission.partner_id,
-                partner_name: bookingWithCommission.partner_name || 'Partner',
-              },
-            },
-            iva_amount: ivaAmount,
-            iva_included: false,
-            shipping_cost: 0,
-            total_partners: 1,
-            commission_split: commissionAmount,
-          };
-
-          const { error: orderError } = await supabase.from('orders').insert({
-            partner_id: bookingWithCommission.partner_id,
-            customer_id: bookingWithCommission.customer_id,
-            booking_id: bookingWithCommission.id,
-            order_type: 'service_booking',
-            service_id: bookingWithCommission.service_id,
-            pet_id: bookingWithCommission.pet_id,
-            status: 'confirmed',
-            total_amount: bookingWithCommission.total_amount,
-            subtotal: bookingWithCommission.total_amount,
-            iva_rate: IVA_RATE,
-            iva_amount: ivaAmount,
-            iva_included_in_price: false,
-            shipping_cost: 0,
-            commission_amount: commissionAmount,
-            partner_amount: partnerAmount,
-            partner_breakdown: partnerBreakdown,
-            partner_name: bookingWithCommission.partner_name,
-            service_name: bookingWithCommission.service_name,
-            pet_name: bookingWithCommission.pet_name,
-            customer_name: bookingWithCommission.customer_name,
-            customer_email: bookingWithCommission.customer_email,
-            customer_phone: bookingWithCommission.customer_phone,
-            appointment_date: bookingWithCommission.date,
-            appointment_time: bookingWithCommission.time,
-            payment_method: bookingWithCommission.payment_method || 'pending',
-            payment_status: bookingWithCommission.payment_status || 'pending',
-            payment_preference_id: bookingWithCommission.payment_preference_id || null,
-            payment_data: bookingWithCommission.payment_data || null,
-            booking_notes: bookingWithCommission.notes || null,
-            items: [
-              {
-                id: bookingWithCommission.service_id || bookingWithCommission.id,
-                name: bookingWithCommission.service_name || 'Servicio',
-                price: bookingWithCommission.total_amount,
-                quantity: 1,
-              },
-            ],
-          });
-
-          if (orderError) {
-            console.error('Error creating order:', orderError);
-          }
-        } catch (orderCreationError) {
-          console.error('Error in order creation process:', orderCreationError);
-        }
-
         showNotification('success', 'Cita agendada correctamente');
 
         setTimeout(() => {
