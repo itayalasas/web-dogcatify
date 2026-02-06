@@ -126,9 +126,9 @@ Deno.serve(async (req: Request) => {
         name: customerName,
       },
       back_urls: {
-        success: `${supabaseUrl}/booking-success`,
-        failure: `${supabaseUrl}/booking-failure`,
-        pending: `${supabaseUrl}/booking-pending`,
+        success: "https://dogcatify.com/pago-exitoso",
+        failure: "https://dogcatify.com/pago-fallido",
+        pending: "https://dogcatify.com/pago-pendiente",
       },
       auto_return: "approved",
       notification_url: backUrl,

@@ -7,6 +7,9 @@ import TermsOfService from './components/TermsOfService';
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
 import ProtectedRoute from './components/ProtectedRoute';
+import PaymentSuccess from './components/PaymentSuccess';
+import PaymentFailure from './components/PaymentFailure';
+import PaymentPending from './components/PaymentPending';
 
 function App() {
   return (
@@ -17,6 +20,9 @@ function App() {
           <Route path="/privacidad" element={<PrivacyPolicy />} />
           <Route path="/terminos" element={<TermsOfService />} />
           <Route path="/login" element={<Login />} />
+          <Route path="/pago-exitoso" element={<PaymentSuccess />} />
+          <Route path="/pago-fallido" element={<PaymentFailure />} />
+          <Route path="/pago-pendiente" element={<PaymentPending />} />
           <Route
             path="/dashboard"
             element={
