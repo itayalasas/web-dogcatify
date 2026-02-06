@@ -95,7 +95,7 @@ async function createOrUpdateOrder(booking: Booking & { payment_preference_id?: 
 
     if (error) throw error;
   } else {
-    const { error } = await supabase.from('orders').insert({
+    const { data: newOrder, error } = await supabase.from('orders').insert({
       partner_id: booking.partner_id,
       customer_id: booking.customer_id,
       booking_id: booking.id,
@@ -126,9 +126,16 @@ async function createOrUpdateOrder(booking: Booking & { payment_preference_id?: 
       payment_data: booking.payment_data || null,
       booking_notes: booking.notes || null,
       items: completeItems,
-    });
+    }).select('order_number').single();
 
     if (error) throw error;
+
+    if (newOrder?.order_number) {
+      await supabase
+        .from('bookings')
+        .update({ order_number: newOrder.order_number })
+        .eq('id', booking.id);
+    }
   }
 }
 

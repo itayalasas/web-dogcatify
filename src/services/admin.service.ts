@@ -229,6 +229,7 @@ export interface Booking {
   payment_data?: any;
   notes?: string | null;
   commission_percentage?: number;
+  order_number?: string | null;
   created_at: string | null;
 }
 
