@@ -17,7 +17,8 @@ const UsersManager = () => {
     phone: '',
     location: '',
     is_owner: false,
-    is_partner: false
+    is_partner: false,
+    is_admin: false
   });
 
   useEffect(() => {
@@ -68,7 +69,8 @@ const UsersManager = () => {
       phone: user.phone || '',
       location: user.location || '',
       is_owner: user.is_owner || false,
-      is_partner: user.is_partner || false
+      is_partner: user.is_partner || false,
+      is_admin: user.is_admin || false
     });
     setShowModal(true);
   };
@@ -81,7 +83,8 @@ const UsersManager = () => {
       phone: '',
       location: '',
       is_owner: false,
-      is_partner: false
+      is_partner: false,
+      is_admin: false
     });
     setShowModal(true);
   };
@@ -97,7 +100,8 @@ const UsersManager = () => {
             phone: formData.phone,
             location: formData.location,
             is_owner: formData.is_owner,
-            is_partner: formData.is_partner
+            is_partner: formData.is_partner,
+            is_admin: formData.is_admin
           })
           .eq('id', editingUser.id);
 
@@ -217,7 +221,10 @@ const UsersManager = () => {
                     </div>
                   </td>
                   <td className="px-6 py-4">
-                    <div className="flex gap-1">
+                    <div className="flex gap-1 flex-wrap">
+                      {user.is_admin && (
+                        <span className="px-2 py-1 text-xs bg-red-100 text-red-800 rounded-full font-semibold">Admin</span>
+                      )}
                       {user.is_owner && (
                         <span className="px-2 py-1 text-xs bg-teal-100 text-teal-800 rounded-full">Dueño</span>
                       )}
@@ -317,7 +324,7 @@ const UsersManager = () => {
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500"
                 />
               </div>
-              <div className="flex gap-4">
+              <div className="flex flex-col gap-2">
                 <label className="flex items-center">
                   <input
                     type="checkbox"
@@ -335,6 +342,15 @@ const UsersManager = () => {
                     className="mr-2"
                   />
                   <span className="text-sm">Es Partner</span>
+                </label>
+                <label className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={formData.is_admin}
+                    onChange={(e) => setFormData({ ...formData, is_admin: e.target.checked })}
+                    className="mr-2"
+                  />
+                  <span className="text-sm font-semibold text-red-600">Es Administrador</span>
                 </label>
               </div>
               <div className="flex gap-3 pt-4">

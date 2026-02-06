@@ -65,6 +65,7 @@ export interface User {
   photo_url: string | null;
   is_owner: boolean | null;
   is_partner: boolean | null;
+  is_admin: boolean | null;
   phone: string | null;
   location: string | null;
   created_at: string | null;
