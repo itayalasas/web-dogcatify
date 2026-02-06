@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { usersService, User } from '../../services/admin.service';
 import { Users as UsersIcon, Phone, MapPin, CheckCircle, XCircle, Trash2, Edit, Plus, X, Search } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { useNotification } from '../../hooks/useNotification';
 
 const UsersManager = () => {
   const [users, setUsers] = useState<User[]>([]);
@@ -11,6 +12,7 @@ const UsersManager = () => {
   const [showModal, setShowModal] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const { showNotification, NotificationContainer } = useNotification();
   const [formData, setFormData] = useState({
     email: '',
     display_name: '',
@@ -109,11 +111,13 @@ const UsersManager = () => {
       }
 
       setShowModal(false);
-      loadUsers();
-      loadStats();
-    } catch (error) {
+      await loadUsers();
+      await loadStats();
+      showNotification('success', editingUser ? 'Usuario actualizado correctamente' : 'Usuario creado correctamente');
+    } catch (error: any) {
       console.error('Error saving user:', error);
-      alert('Error al guardar el usuario');
+      const errorMessage = error?.message || 'No se pudo guardar el usuario. Por favor, intente nuevamente.';
+      showNotification('error', errorMessage);
     }
   };
 
@@ -127,11 +131,13 @@ const UsersManager = () => {
         .eq('id', id);
 
       if (error) throw error;
-      loadUsers();
-      loadStats();
-    } catch (error) {
+      await loadUsers();
+      await loadStats();
+      showNotification('success', 'Usuario eliminado correctamente');
+    } catch (error: any) {
       console.error('Error deleting user:', error);
-      alert('Error al eliminar el usuario');
+      const errorMessage = error?.message || 'No se pudo eliminar el usuario. Por favor, intente nuevamente.';
+      showNotification('error', errorMessage);
     }
   };
 
@@ -140,7 +146,9 @@ const UsersManager = () => {
   }
 
   return (
-    <div>
+    <>
+      <NotificationContainer />
+      <div>
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
         <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
           <p className="text-sm text-gray-600">Total Usuarios</p>
@@ -373,6 +381,7 @@ const UsersManager = () => {
         </div>
       )}
     </div>
+    </>
   );
 };
 

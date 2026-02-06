@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ordersService, Order } from '../../services/admin.service';
 import { ShoppingCart, DollarSign, CheckCircle, Clock, XCircle, AlertCircle, Search, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useNotification } from '../../hooks/useNotification';
 
 const ITEMS_PER_PAGE = 20;
 
@@ -11,6 +12,7 @@ const OrdersManager = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
+  const { showNotification, NotificationContainer } = useNotification();
 
   useEffect(() => {
     loadOrders();
@@ -52,10 +54,12 @@ const OrdersManager = () => {
   const handleUpdateStatus = async (id: string, status: string) => {
     try {
       await ordersService.updateStatus(id, status);
-      loadOrders();
-    } catch (error) {
+      await loadOrders();
+      showNotification('success', 'Estado del pedido actualizado correctamente');
+    } catch (error: any) {
       console.error('Error updating order:', error);
-      alert('Error al actualizar el pedido');
+      const errorMessage = error?.message || 'No se pudo actualizar el estado del pedido. Por favor, verifique sus permisos e intente nuevamente.';
+      showNotification('error', errorMessage);
     }
   };
 
@@ -108,7 +112,9 @@ const OrdersManager = () => {
   }
 
   return (
-    <div>
+    <>
+      <NotificationContainer />
+      <div>
       <div className="mb-4 flex gap-3">
         <div className="flex-1 relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
@@ -223,6 +229,7 @@ const OrdersManager = () => {
         </div>
       )}
     </div>
+    </>
   );
 };
 

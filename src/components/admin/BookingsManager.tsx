@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { bookingsService, Booking } from '../../services/admin.service';
 import { Calendar, CheckCircle, Clock, XCircle, AlertCircle } from 'lucide-react';
+import { useNotification } from '../../hooks/useNotification';
 
 const BookingsManager = () => {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
+  const { showNotification, NotificationContainer } = useNotification();
 
   useEffect(() => {
     loadBookings();
@@ -25,10 +27,12 @@ const BookingsManager = () => {
   const handleUpdateStatus = async (id: string, status: string) => {
     try {
       await bookingsService.updateStatus(id, status);
-      loadBookings();
-    } catch (error) {
+      await loadBookings();
+      showNotification('success', 'Estado de la cita actualizado correctamente');
+    } catch (error: any) {
       console.error('Error updating booking:', error);
-      alert('Error al actualizar la cita');
+      const errorMessage = error?.message || 'No se pudo actualizar el estado de la cita. Por favor, intente nuevamente.';
+      showNotification('error', errorMessage);
     }
   };
 
@@ -57,7 +61,9 @@ const BookingsManager = () => {
   }
 
   return (
-    <div>
+    <>
+      <NotificationContainer />
+      <div>
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -122,6 +128,7 @@ const BookingsManager = () => {
         </div>
       )}
     </div>
+    </>
   );
 };
 
