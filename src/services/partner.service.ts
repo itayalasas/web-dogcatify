@@ -52,12 +52,33 @@ async function createOrUpdateOrder(booking: Booking & { payment_preference_id?: 
   const commissionPercentage = booking.commission_percentage || 5;
   const commissionAmount = (booking.total_amount * commissionPercentage) / 100;
   const partnerAmount = booking.total_amount - commissionAmount;
+  const ivaAmount = (booking.total_amount * IVA_RATE) / 100;
 
   const { data: existingOrder } = await supabase
     .from('orders')
     .select('id')
     .eq('booking_id', booking.id)
     .maybeSingle();
+
+  const completeItems = [
+    {
+      id: booking.service_id || booking.id,
+      name: booking.service_name || 'Servicio',
+      type: 'service',
+      price: booking.total_amount,
+      currency: 'UYU',
+      currency_code_dgi: '858',
+      iva_rate: IVA_RATE,
+      quantity: 1,
+      subtotal: booking.total_amount,
+      iva_amount: ivaAmount,
+      partnerId: booking.partner_id,
+      partnerName: booking.partner_name || 'Partner',
+      partner_name: booking.partner_name || 'Partner',
+      original_price: booking.total_amount,
+      discount_percentage: 0,
+    },
+  ];
 
   if (existingOrder) {
     const { error } = await supabase
@@ -67,6 +88,7 @@ async function createOrUpdateOrder(booking: Booking & { payment_preference_id?: 
         status: 'confirmed',
         commission_amount: commissionAmount,
         partner_amount: partnerAmount,
+        items: completeItems,
         updated_at: new Date().toISOString(),
       })
       .eq('booking_id', booking.id);
@@ -84,7 +106,7 @@ async function createOrUpdateOrder(booking: Booking & { payment_preference_id?: 
       total_amount: booking.total_amount,
       subtotal: booking.total_amount,
       iva_rate: IVA_RATE,
-      iva_amount: (booking.total_amount * IVA_RATE) / 100,
+      iva_amount: ivaAmount,
       iva_included_in_price: false,
       shipping_cost: 0,
       commission_amount: commissionAmount,
@@ -103,14 +125,7 @@ async function createOrUpdateOrder(booking: Booking & { payment_preference_id?: 
       payment_preference_id: booking.payment_preference_id || null,
       payment_data: booking.payment_data || null,
       booking_notes: booking.notes || null,
-      items: [
-        {
-          id: booking.service_id || booking.id,
-          name: booking.service_name || 'Servicio',
-          price: booking.total_amount,
-          quantity: 1,
-        },
-      ],
+      items: completeItems,
     });
 
     if (error) throw error;
