@@ -36,7 +36,7 @@ function generatePartnerBreakdown(booking: Booking) {
   };
 }
 
-async function createOrUpdateOrder(booking: Booking) {
+async function createOrUpdateOrder(booking: Booking & { payment_preference_id?: string; notes?: string; payment_data?: any }) {
   const partnerBreakdown = generatePartnerBreakdown(booking);
   const commissionPercentage = booking.commission_percentage || 5;
   const commissionAmount = (booking.total_amount * commissionPercentage) / 100;
@@ -87,6 +87,9 @@ async function createOrUpdateOrder(booking: Booking) {
       appointment_time: booking.time,
       payment_method: booking.payment_method || 'pending',
       payment_status: booking.payment_status || 'pending',
+      payment_preference_id: booking.payment_preference_id || null,
+      payment_data: booking.payment_data || null,
+      booking_notes: booking.notes || null,
       items: [
         {
           id: booking.service_id || booking.id,
@@ -222,6 +225,9 @@ export interface Booking {
   total_amount: number;
   payment_status: string | null;
   payment_method: string | null;
+  payment_preference_id?: string | null;
+  payment_data?: any;
+  notes?: string | null;
   commission_percentage?: number;
   created_at: string | null;
 }
@@ -559,7 +565,10 @@ export const bookingsService = {
       const bookingWithCommission = {
         ...data,
         commission_percentage: partnerData?.commission_percentage || 5,
-      } as Booking;
+        payment_preference_id: data.payment_preference_id,
+        notes: data.notes,
+        payment_data: data.payment_data,
+      };
 
       await createOrUpdateOrder(bookingWithCommission);
     }

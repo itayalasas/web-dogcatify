@@ -43,6 +43,7 @@ const ManualBooking = ({ onBookingCreated }: ManualBookingProps) => {
   const [pets, setPets] = useState<Pet[]>([]);
   const [loading, setLoading] = useState(false);
   const [partnerId, setPartnerId] = useState<string | null>(null);
+  const [partnerName, setPartnerName] = useState<string>('');
   const [searchResults, setSearchResults] = useState<CustomerProfile[]>([]);
   const [showSearchResults, setShowSearchResults] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -72,7 +73,7 @@ const ManualBooking = ({ onBookingCreated }: ManualBookingProps) => {
     try {
       const { data: partner, error } = await supabase
         .from('partners')
-        .select('id')
+        .select('id, business_name')
         .eq('user_id', user?.id)
         .maybeSingle();
 
@@ -80,6 +81,7 @@ const ManualBooking = ({ onBookingCreated }: ManualBookingProps) => {
 
       if (partner) {
         setPartnerId(partner.id);
+        setPartnerName(partner.business_name);
         loadServices(partner.id);
       } else {
         showNotification('error', 'No se encontró información del partner');
@@ -416,6 +418,7 @@ const ManualBooking = ({ onBookingCreated }: ManualBookingProps) => {
         .from('bookings')
         .insert({
           partner_id: partnerId,
+          partner_name: partnerName,
           service_id: formData.service_id,
           service_name: selectedService.name,
           service_duration: selectedService.duration,
