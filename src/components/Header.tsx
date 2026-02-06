@@ -34,7 +34,7 @@ const Header = () => {
               Términos
             </Link>
             <button className="bg-teal-600 text-white px-6 py-2 rounded-full hover:bg-teal-700 transition-colors">
-              Descargar App
+              Iniciar Sesión
             </button>
           </nav>
 
@@ -68,7 +68,7 @@ const Header = () => {
                 Términos
               </Link>
               <button className="bg-teal-600 text-white px-6 py-2 rounded-full hover:bg-teal-700 transition-colors w-fit">
-                Descargar App
+                Iniciar Sesión
               </button>
             </nav>
           </div>
