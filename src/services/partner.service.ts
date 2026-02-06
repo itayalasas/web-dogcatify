@@ -3,16 +3,28 @@ import { Booking, PartnerService, PartnerProduct, ServiceReview } from './admin.
 
 const IVA_RATE = 22;
 
-function generatePartnerBreakdown(booking: Booking) {
+async function generatePartnerBreakdown(booking: Booking) {
   const servicePrice = booking.total_amount || 0;
   const ivaAmount = (servicePrice * IVA_RATE) / 100;
   const commissionPercentage = booking.commission_percentage || 5;
   const commissionAmount = (servicePrice * commissionPercentage) / 100;
 
+  const { data: partnerFiscalData } = await supabase
+    .from('partners')
+    .select('rut, email, phone, address')
+    .eq('id', booking.partner_id)
+    .maybeSingle();
+
   return {
     iva_rate: IVA_RATE,
     partners: {
       [booking.partner_id]: {
+        partner_id: booking.partner_id,
+        partner_name: booking.partner_name || 'Partner',
+        partner_rut: partnerFiscalData?.rut || null,
+        partner_email: partnerFiscalData?.email || null,
+        partner_phone: partnerFiscalData?.phone || null,
+        partner_address: partnerFiscalData?.address || null,
         items: [
           {
             id: booking.service_id || booking.id,
@@ -25,8 +37,6 @@ function generatePartnerBreakdown(booking: Booking) {
           },
         ],
         subtotal: servicePrice,
-        partner_id: booking.partner_id,
-        partner_name: booking.partner_name || 'Partner',
       },
     },
     iva_amount: ivaAmount,
@@ -38,7 +48,7 @@ function generatePartnerBreakdown(booking: Booking) {
 }
 
 async function createOrUpdateOrder(booking: Booking & { payment_preference_id?: string; notes?: string; payment_data?: any }) {
-  const partnerBreakdown = generatePartnerBreakdown(booking);
+  const partnerBreakdown = await generatePartnerBreakdown(booking);
   const commissionPercentage = booking.commission_percentage || 5;
   const commissionAmount = (booking.total_amount * commissionPercentage) / 100;
   const partnerAmount = booking.total_amount - commissionAmount;
