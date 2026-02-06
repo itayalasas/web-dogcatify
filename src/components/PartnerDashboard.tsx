@@ -15,6 +15,9 @@ import {
   DollarSign,
   Users,
 } from 'lucide-react';
+import MyBookings from './partner/MyBookings';
+import MyServices from './partner/MyServices';
+import MyReviews from './partner/MyReviews';
 
 const PartnerDashboard = () => {
   const { user, profile, signOut } = useAuth();
@@ -194,7 +197,11 @@ const PartnerDashboard = () => {
               </>
             )}
 
-            {activeSection !== 'overview' && (
+            {activeSection === 'appointments' && <MyBookings />}
+            {activeSection === 'services' && <MyServices />}
+            {activeSection === 'reviews' && <MyReviews />}
+
+            {!['overview', 'appointments', 'services', 'reviews'].includes(activeSection) && (
               <div className="bg-white rounded-xl shadow-sm p-8 border border-gray-100">
                 <div className="text-center py-12">
                   <div className="bg-gray-100 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4">

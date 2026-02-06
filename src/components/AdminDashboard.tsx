@@ -22,6 +22,10 @@ import PromotionsManager from './admin/PromotionsManager';
 import PlacesManager from './admin/PlacesManager';
 import PartnersManager from './admin/PartnersManager';
 import SettingsManager from './admin/SettingsManager';
+import UsersManager from './admin/UsersManager';
+import PetsManager from './admin/PetsManager';
+import OrdersManager from './admin/OrdersManager';
+import BookingsManager from './admin/BookingsManager';
 
 const AdminDashboard = () => {
   const { user, signOut } = useAuth();
@@ -109,6 +113,18 @@ const AdminDashboard = () => {
 
       case 'partners':
         return <PartnersManager />;
+
+      case 'users':
+        return <UsersManager />;
+
+      case 'pets':
+        return <PetsManager />;
+
+      case 'orders':
+        return <OrdersManager />;
+
+      case 'appointments':
+        return <BookingsManager />;
 
       case 'settings':
         return <SettingsManager />;
