@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { ordersService, Order } from '../../services/admin.service';
-import { ShoppingCart, DollarSign, CheckCircle, Clock, XCircle, AlertCircle, Search, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ShoppingCart, DollarSign, CheckCircle, Clock, XCircle, AlertCircle, Search, ChevronLeft, ChevronRight, MoreVertical, RefreshCw } from 'lucide-react';
 import { useNotification } from '../../hooks/useNotification';
+import { supabase } from '../../lib/supabase';
 
 const ITEMS_PER_PAGE = 20;
 
@@ -12,6 +13,8 @@ const OrdersManager = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [processingOrders, setProcessingOrders] = useState<Set<string>>(new Set());
   const { showNotification, NotificationContainer } = useNotification();
 
   useEffect(() => {
@@ -70,6 +73,49 @@ const OrdersManager = () => {
       console.error('Error updating order:', error);
       const errorMessage = error?.message || 'No se pudo actualizar el estado del pedido. Por favor, verifique sus permisos e intente nuevamente.';
       showNotification('error', errorMessage);
+    }
+  };
+
+  const handleResendToAccounting = async (orderId: string) => {
+    setProcessingOrders(prev => new Set(prev).add(orderId));
+    setOpenMenuId(null);
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+
+      if (!session) {
+        throw new Error('No hay sesión activa');
+      }
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-order-to-accounting`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ order_id: orderId }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Error al reenviar al sistema contable');
+      }
+
+      const result = await response.json();
+      showNotification('success', 'Pedido reenviado al sistema contable correctamente');
+      await loadOrders();
+    } catch (error: any) {
+      console.error('Error resending to accounting:', error);
+      showNotification('error', error.message || 'Error al reenviar al sistema contable');
+    } finally {
+      setProcessingOrders(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(orderId);
+        return newSet;
+      });
     }
   };
 
@@ -186,18 +232,49 @@ const OrdersManager = () => {
                     {order.created_at ? new Date(order.created_at).toLocaleDateString() : 'N/A'}
                   </td>
                   <td className="px-6 py-4">
-                    <select
-                      value={order.status}
-                      onChange={(e) => handleUpdateStatus(order.id, e.target.value)}
-                      className="text-xs border border-gray-300 rounded px-2 py-1"
-                    >
-                      <option value="pending">Pendiente</option>
-                      <option value="confirmed">Confirmado</option>
-                      <option value="preparing">Preparando</option>
-                      <option value="shipped">Enviado</option>
-                      <option value="delivered">Entregado</option>
-                      <option value="cancelled">Cancelado</option>
-                    </select>
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={order.status}
+                        onChange={(e) => handleUpdateStatus(order.id, e.target.value)}
+                        className="text-xs border border-gray-300 rounded px-2 py-1"
+                      >
+                        <option value="pending">Pendiente</option>
+                        <option value="confirmed">Confirmado</option>
+                        <option value="preparing">Preparando</option>
+                        <option value="shipped">Enviado</option>
+                        <option value="delivered">Entregado</option>
+                        <option value="cancelled">Cancelado</option>
+                      </select>
+
+                      <div className="relative">
+                        <button
+                          onClick={() => setOpenMenuId(openMenuId === order.id ? null : order.id)}
+                          className="p-1 hover:bg-gray-100 rounded transition-colors"
+                          title="Más opciones"
+                        >
+                          <MoreVertical className="h-4 w-4 text-gray-600" />
+                        </button>
+
+                        {openMenuId === order.id && (
+                          <>
+                            <div
+                              className="fixed inset-0 z-10"
+                              onClick={() => setOpenMenuId(null)}
+                            />
+                            <div className="absolute right-0 mt-1 w-56 bg-white border border-gray-200 rounded-lg shadow-lg z-20">
+                              <button
+                                onClick={() => handleResendToAccounting(order.id)}
+                                disabled={processingOrders.has(order.id)}
+                                className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                              >
+                                <RefreshCw className={`h-4 w-4 ${processingOrders.has(order.id) ? 'animate-spin' : ''}`} />
+                                {processingOrders.has(order.id) ? 'Reenviando...' : 'Reenviar a Sistema Contable'}
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </div>
                   </td>
                 </tr>
               ))}
