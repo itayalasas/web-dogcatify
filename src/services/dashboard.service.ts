@@ -58,12 +58,12 @@ export const dashboardService = {
         { count: totalPlaces },
         { count: activePromotions },
       ] = await Promise.all([
-        supabase.from('users').select('*', { count: 'exact', head: true }),
-        supabase.from('users').select('*', { count: 'exact', head: true }).gte('created_at', firstDayThisMonth.toISOString()),
-        supabase.from('users').select('*', { count: 'exact', head: true }).gte('created_at', firstDayLastMonth.toISOString()).lte('created_at', lastDayLastMonth.toISOString()),
-        supabase.from('partners').select('*', { count: 'exact', head: true }).eq('status', 'approved'),
-        supabase.from('partners').select('*', { count: 'exact', head: true }).eq('status', 'approved').gte('created_at', firstDayThisMonth.toISOString()),
-        supabase.from('partners').select('*', { count: 'exact', head: true }).eq('status', 'approved').gte('created_at', firstDayLastMonth.toISOString()).lte('created_at', lastDayLastMonth.toISOString()),
+        supabase.from('profiles').select('*', { count: 'exact', head: true }),
+        supabase.from('profiles').select('*', { count: 'exact', head: true }).gte('created_at', firstDayThisMonth.toISOString()),
+        supabase.from('profiles').select('*', { count: 'exact', head: true }).gte('created_at', firstDayLastMonth.toISOString()).lte('created_at', lastDayLastMonth.toISOString()),
+        supabase.from('partners').select('*', { count: 'exact', head: true }).eq('is_active', true).eq('is_verified', true),
+        supabase.from('partners').select('*', { count: 'exact', head: true }).eq('is_active', true).eq('is_verified', true).gte('created_at', firstDayThisMonth.toISOString()),
+        supabase.from('partners').select('*', { count: 'exact', head: true }).eq('is_active', true).eq('is_verified', true).gte('created_at', firstDayLastMonth.toISOString()).lte('created_at', lastDayLastMonth.toISOString()),
         supabase.from('pets').select('*', { count: 'exact', head: true }),
         supabase.from('pets').select('*', { count: 'exact', head: true }).gte('created_at', firstDayThisMonth.toISOString()),
         supabase.from('pets').select('*', { count: 'exact', head: true }).gte('created_at', firstDayLastMonth.toISOString()).lte('created_at', lastDayLastMonth.toISOString()),
@@ -204,8 +204,8 @@ export const dashboardService = {
       const startDate = new Date();
       startDate.setDate(startDate.getDate() - days);
 
-      const { data: users, error } = await supabase
-        .from('users')
+      const { data: profiles, error } = await supabase
+        .from('profiles')
         .select('created_at')
         .gte('created_at', startDate.toISOString())
         .order('created_at', { ascending: true });
@@ -220,8 +220,8 @@ export const dashboardService = {
         dailyUsers.set(dateStr, 0);
       }
 
-      users?.forEach((user) => {
-        const dateStr = user.created_at.split('T')[0];
+      profiles?.forEach((profile) => {
+        const dateStr = profile.created_at.split('T')[0];
         const current = dailyUsers.get(dateStr) || 0;
         dailyUsers.set(dateStr, current + 1);
       });
