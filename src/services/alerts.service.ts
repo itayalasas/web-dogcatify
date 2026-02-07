@@ -308,6 +308,14 @@ export const alertsService = {
     const timeWindow = new Date();
     timeWindow.setMinutes(timeWindow.getMinutes() - threshold.time_window_minutes);
 
+    console.log('=== MANUAL ALERT CHECK ===');
+    console.log('Alert Type:', alertType);
+    console.log('Pattern:', threshold.error_pattern);
+    console.log('Threshold:', threshold.threshold_count);
+    console.log('Time Window:', threshold.time_window_minutes, 'minutes');
+    console.log('Looking since:', timeWindow.toISOString());
+    console.log('Current time:', new Date().toISOString());
+
     let query = supabase
       .from('audit_logs')
       .select('id, action, error_message, resource_type, created_at', { count: 'exact' })
@@ -321,6 +329,14 @@ export const alertsService = {
     }
 
     const { count, data, error } = await query;
+
+    console.log('Query Result:', {
+      count,
+      dataLength: data?.length,
+      error,
+      sample: data?.slice(0, 3)
+    });
+    console.log('=== END ALERT CHECK ===');
 
     if (error) {
       return {
@@ -358,15 +374,24 @@ export const alertsService = {
       }
     }
 
+    const message = errorCount === 0
+      ? `No se encontraron errores con el patrón "${threshold.error_pattern}" en los últimos ${threshold.time_window_minutes} minutos. Genera nuevos fallos de login para probar la alerta.`
+      : `No se alcanzó el umbral. Se encontraron ${errorCount} errores de ${threshold.threshold_count} necesarios en los últimos ${threshold.time_window_minutes} minutos`;
+
     return {
       triggered: false,
-      message: `No se alcanzó el umbral. Se encontraron ${errorCount} errores de ${threshold.threshold_count} necesarios en los últimos ${threshold.time_window_minutes} minutos`,
+      message,
       details: {
         errorCount,
         threshold: threshold.threshold_count,
         timeWindow: threshold.time_window_minutes,
+        timeWindowStart: timeWindow.toISOString(),
+        currentTime: new Date().toISOString(),
         pattern: threshold.error_pattern,
-        recentErrors: data?.slice(0, 5)
+        recentErrors: data?.slice(0, 5),
+        explanation: errorCount === 0
+          ? 'No hay errores recientes en la ventana de tiempo. Los errores deben ocurrir dentro de la ventana de tiempo configurada para activar la alerta.'
+          : 'Se encontraron algunos errores pero no alcanzan el umbral configurado.'
       }
     };
   }
