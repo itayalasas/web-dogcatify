@@ -23,6 +23,8 @@ export interface CreateAuditLogParams {
   success?: boolean;
   error_message?: string;
   user_email_override?: string;
+  ip_address?: string;
+  user_agent?: string;
 }
 
 export const auditService = {
@@ -39,6 +41,8 @@ export const auditService = {
         details: params.details || {},
         success: params.success !== undefined ? params.success : true,
         error_message: params.error_message || null,
+        ip_address: params.ip_address || null,
+        user_agent: params.user_agent || (typeof navigator !== 'undefined' ? navigator.userAgent : null),
       };
 
       const { error } = await supabase

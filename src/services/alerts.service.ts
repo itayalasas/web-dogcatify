@@ -281,11 +281,14 @@ export const alertsService = {
         action: 'ALERT_SENT',
         resource_type: 'system_alert',
         resource_id: alertId,
+        user_email_override: threshold.notify_email,
         details: {
           alert_type: threshold.alert_type,
           severity: threshold.severity,
           error_count: errorCount,
-          recipient: threshold.notify_email
+          recipient: threshold.notify_email,
+          threshold_count: threshold.threshold_count,
+          time_window_minutes: threshold.time_window_minutes
         }
       });
 
@@ -296,8 +299,12 @@ export const alertsService = {
         resource_type: 'system_alert',
         success: false,
         error_message: error instanceof Error ? error.message : 'Unknown error',
+        user_email_override: threshold.notify_email,
         details: {
-          alert_type: threshold.alert_type
+          alert_type: threshold.alert_type,
+          severity: threshold.severity,
+          recipient: threshold.notify_email,
+          error_stack: error instanceof Error ? error.stack : undefined
         }
       });
     }

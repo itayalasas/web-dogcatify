@@ -262,6 +262,7 @@ async function sendAlert(supabase: any, threshold: AlertThreshold, alertKey: str
     await supabase
       .from('audit_logs')
       .insert({
+        user_email: threshold.notify_email,
         action: 'ALERT_SENT',
         resource_type: 'system_alert',
         resource_id: alertId,
@@ -270,7 +271,10 @@ async function sendAlert(supabase: any, threshold: AlertThreshold, alertKey: str
           alert_type: threshold.alert_type,
           severity: threshold.severity,
           error_count: errorCount,
-          recipient: threshold.notify_email
+          recipient: threshold.notify_email,
+          threshold_count: threshold.threshold_count,
+          time_window_minutes: threshold.time_window_minutes,
+          cooldown_minutes: threshold.cooldown_minutes
         }
       });
 
@@ -281,12 +285,16 @@ async function sendAlert(supabase: any, threshold: AlertThreshold, alertKey: str
     await supabase
       .from('audit_logs')
       .insert({
+        user_email: threshold.notify_email,
         action: 'ALERT_FAILED',
         resource_type: 'system_alert',
         success: false,
         error_message: error.message || 'Unknown error',
         details: {
-          alert_type: threshold.alert_type
+          alert_type: threshold.alert_type,
+          severity: threshold.severity,
+          recipient: threshold.notify_email,
+          error_stack: error.stack
         }
       });
 
