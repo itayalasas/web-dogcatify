@@ -32,13 +32,20 @@ const SecurityManager = () => {
   const { showNotification, NotificationContainer } = useNotification();
 
   useEffect(() => {
-    if (activeTab === 'logs') {
-      loadActivityLogs();
-    } else if (activeTab === 'settings') {
-      loadSettings();
-    } else if (activeTab === 'alerts') {
-      loadAlertConfig();
-    }
+    const checkSessionAndLoad = async () => {
+      const { data: { session }, error } = await supabase.auth.getSession();
+      console.log('Current session:', session?.user?.email, 'Error:', error);
+
+      if (activeTab === 'logs') {
+        await loadActivityLogs();
+      } else if (activeTab === 'settings') {
+        await loadSettings();
+      } else if (activeTab === 'alerts') {
+        await loadAlertConfig();
+      }
+    };
+
+    checkSessionAndLoad();
   }, [activeTab]);
 
   const loadActivityLogs = async (page: number = 1) => {
@@ -46,20 +53,29 @@ const SecurityManager = () => {
       setLoading(true);
       const offset = (page - 1) * logsPerPage;
 
+      console.log('Loading audit logs, page:', page, 'offset:', offset);
+
       const { data: logs, error, count } = await supabase
         .from('audit_logs')
         .select('*', { count: 'exact' })
         .order('created_at', { ascending: false })
         .range(offset, offset + logsPerPage - 1);
 
-      if (error) throw error;
+      console.log('Audit logs response:', { logs: logs?.length, error, count });
+
+      if (error) {
+        console.error('RLS or query error:', error);
+        throw error;
+      }
 
       setActivityLogs(logs || []);
       setTotalLogs(count || 0);
       setCurrentPage(page);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error loading activity logs:', error);
-      showNotification('error', 'Error al cargar logs de auditoría');
+      showNotification('error', `Error al cargar logs: ${error.message || 'Error desconocido'}`);
+      setActivityLogs([]);
+      setTotalLogs(0);
     } finally {
       setLoading(false);
     }
@@ -357,7 +373,21 @@ const SecurityManager = () => {
 
             {activityLogs.length === 0 && (
               <div className="text-center py-12 text-gray-500">
-                {searchTerm ? 'No se encontraron registros' : 'No hay registros de auditoría. La tabla audit_logs necesita ser creada.'}
+                {searchTerm ? (
+                  'No se encontraron registros que coincidan con tu búsqueda'
+                ) : loading ? (
+                  'Cargando registros de auditoría...'
+                ) : (
+                  <div>
+                    <p className="mb-2">No hay registros de auditoría disponibles</p>
+                    <p className="text-sm text-gray-400">
+                      Los registros se mostrarán aquí cuando se realicen acciones en el sistema
+                    </p>
+                    <p className="text-xs text-gray-400 mt-2">
+                      Si crees que esto es un error, verifica la consola del navegador
+                    </p>
+                  </div>
+                )}
               </div>
             )}
 
