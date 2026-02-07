@@ -8,7 +8,8 @@ import { Calendar, CheckCircle, Clock, XCircle, AlertCircle, Search, ChevronLeft
 const MyBookings = () => {
   const { profile } = useAuth();
   const [bookings, setBookings] = useState<Booking[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [partnerId, setPartnerId] = useState<string | null>(null);
 
   const [filters, setFilters] = useState({
@@ -44,29 +45,37 @@ const MyBookings = () => {
 
       if (partner) {
         setPartnerId(partner.id);
-        loadBookings(partner.id);
+        loadBookings(partner.id, true);
       } else {
         console.error('No partner found for user');
-        setLoading(false);
+        setInitialLoading(false);
       }
     } catch (error) {
       console.error('Error loading partner data:', error);
-      setLoading(false);
+      setInitialLoading(false);
     }
   };
 
-  const loadBookings = async (partnerIdToLoad?: string) => {
+  const loadBookings = async (partnerIdToLoad?: string, isInitial: boolean = false) => {
     const idToUse = partnerIdToLoad || partnerId;
     if (!idToUse) return;
 
     try {
-      setLoading(true);
+      if (isInitial) {
+        setInitialLoading(true);
+      } else {
+        setRefreshing(true);
+      }
       const data = await partnerBookingsService.getMyBookings(idToUse);
       setBookings(data);
     } catch (error) {
       console.error('Error loading bookings:', error);
     } finally {
-      setLoading(false);
+      if (isInitial) {
+        setInitialLoading(false);
+      } else {
+        setRefreshing(false);
+      }
     }
   };
 
@@ -154,7 +163,7 @@ const MyBookings = () => {
     );
   };
 
-  if (loading) {
+  if (initialLoading) {
     return <div className="text-center py-12">Cargando citas...</div>;
   }
 
@@ -278,6 +287,14 @@ const MyBookings = () => {
       </div>
 
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        {refreshing && (
+          <div className="bg-teal-50 border-b border-teal-200 px-4 py-2">
+            <div className="flex items-center justify-center">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-teal-600 mr-2"></div>
+              <span className="text-sm text-teal-700">Actualizando citas...</span>
+            </div>
+          </div>
+        )}
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
