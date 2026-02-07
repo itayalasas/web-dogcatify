@@ -87,10 +87,106 @@ const MyBusinesses = () => {
       console.log('Places found:', data?.length || 0, 'Total count:', count);
       console.log('Places data:', data);
 
+      if (!data || data.length === 0) {
+        await checkAndMigrateServices(partnerIdToLoad);
+        return;
+      }
+
       setPlaces(data || []);
     } catch (error) {
       console.error('Error loading places:', error);
     } finally {
+      setLoading(false);
+    }
+  };
+
+  const checkAndMigrateServices = async (partnerIdToLoad: string) => {
+    try {
+      console.log('Checking for services without place...');
+
+      const { data: services, error: servicesError } = await supabase
+        .from('partner_services')
+        .select('id')
+        .eq('partner_id', partnerIdToLoad)
+        .is('place_id', null);
+
+      if (servicesError) throw servicesError;
+
+      if (services && services.length > 0) {
+        console.log(`Found ${services.length} services without place. Creating default place...`);
+        await createDefaultPlace(partnerIdToLoad);
+      } else {
+        console.log('No services without place found');
+        setPlaces([]);
+        setLoading(false);
+      }
+    } catch (error) {
+      console.error('Error checking services:', error);
+      setPlaces([]);
+      setLoading(false);
+    }
+  };
+
+  const createDefaultPlace = async (partnerIdToLoad: string) => {
+    try {
+      const { data: partner, error: partnerError } = await supabase
+        .from('partners')
+        .select('business_name, business_type, address, phone, description')
+        .eq('id', partnerIdToLoad)
+        .maybeSingle();
+
+      if (partnerError) throw partnerError;
+      if (!partner) {
+        console.error('Partner not found');
+        setLoading(false);
+        return;
+      }
+
+      const categoryMap: Record<string, string> = {
+        'walking': 'paseador',
+        'veterinary': 'veterinaria',
+        'grooming': 'peluqueria',
+        'daycare': 'guarderia',
+        'hotel': 'hotel',
+        'store': 'tienda',
+        'training': 'adiestramiento'
+      };
+
+      const category = categoryMap[partner.business_type] || 'paseador';
+
+      const { data: newPlace, error: placeError } = await supabase
+        .from('places')
+        .insert([{
+          partner_id: partnerIdToLoad,
+          name: partner.business_name,
+          category: category,
+          address: partner.address || 'Dirección no especificada',
+          phone: partner.phone,
+          description: partner.description || '',
+          is_active: true,
+          rating: 5
+        }])
+        .select()
+        .single();
+
+      if (placeError) throw placeError;
+
+      console.log('Default place created:', newPlace);
+
+      const { error: updateError } = await supabase
+        .from('partner_services')
+        .update({ place_id: newPlace.id })
+        .eq('partner_id', partnerIdToLoad)
+        .is('place_id', null);
+
+      if (updateError) throw updateError;
+
+      console.log('Services migrated to new place');
+
+      await loadPlaces(partnerIdToLoad);
+    } catch (error) {
+      console.error('Error creating default place:', error);
+      setPlaces([]);
       setLoading(false);
     }
   };
