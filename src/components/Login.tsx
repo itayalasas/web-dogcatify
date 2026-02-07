@@ -22,11 +22,15 @@ const Login = () => {
       if (error) {
         setError('Credenciales incorrectas. Por favor verifica tu email y contraseña.');
 
-        logError('LOGIN_FAILED', 'Credenciales incorrectas', {
-          email: email,
-          error_code: error.status || 'unknown',
-          error_message: error.message || 'Invalid credentials'
-        });
+        logError(
+          'LOGIN_FAILED',
+          'Credenciales incorrectas',
+          {
+            error_code: error.status || 'unknown',
+            error_message: error.message || 'Invalid credentials'
+          },
+          email
+        );
       } else {
         logAction('LOGIN', {
           email: email,
@@ -37,10 +41,14 @@ const Login = () => {
     } catch (err: any) {
       setError('Ocurrió un error al iniciar sesión. Intenta de nuevo.');
 
-      logError('LOGIN_ERROR', err?.message || 'Error desconocido al iniciar sesión', {
-        email: email,
-        error_type: 'exception'
-      });
+      logError(
+        'LOGIN_ERROR',
+        err?.message || 'Error desconocido al iniciar sesión',
+        {
+          error_type: 'exception'
+        },
+        email
+      );
     } finally {
       setLoading(false);
     }

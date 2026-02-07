@@ -22,6 +22,7 @@ export interface CreateAuditLogParams {
   details?: any;
   success?: boolean;
   error_message?: string;
+  user_email_override?: string;
 }
 
 export const auditService = {
@@ -31,7 +32,7 @@ export const auditService = {
 
       const logEntry = {
         user_id: user?.id || null,
-        user_email: user?.email || null,
+        user_email: params.user_email_override || user?.email || null,
         action: params.action,
         resource_type: params.resource_type || null,
         resource_id: params.resource_id || null,
@@ -153,7 +154,14 @@ export const logResourceAction = (
 export const logError = (
   action: string,
   errorMessage: string,
-  details?: any
+  details?: any,
+  userEmail?: string
 ) => {
-  auditService.log({ action, success: false, error_message: errorMessage, details });
+  auditService.log({
+    action,
+    success: false,
+    error_message: errorMessage,
+    details,
+    user_email_override: userEmail
+  });
 };

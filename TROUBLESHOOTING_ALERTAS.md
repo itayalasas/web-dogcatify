@@ -289,18 +289,54 @@ Agregar el template a la función send-email.
 
 ### No se registran los errores de login
 
-**Causa**: El componente Login no está llamando a `logError()`.
+**Causa 1**: El componente Login no está llamando a `logError()`.
 
-**Solución**: Verificar que el código en `Login.tsx` incluye:
+**Solución 1**: Verificar que el código en `Login.tsx` incluye:
 ```typescript
 import { logError, logAction } from '../services/audit.service';
 
 // En el catch del login:
-logError('LOGIN_FAILED', 'Credenciales incorrectas', {
-  email: email,
-  error_code: error.status || 'unknown'
-});
+logError(
+  'LOGIN_FAILED',
+  'Credenciales incorrectas',
+  {
+    error_code: error.status || 'unknown'
+  },
+  email  // ✅ IMPORTANTE: Pasar el email como 4to parámetro
+);
 ```
+
+**Causa 2**: RLS Policy no permite logs anónimos (PROBLEMA MÁS COMÚN ✅)
+
+Cuando intentas hacer login con credenciales incorrectas, NO estás autenticado todavía, por lo que la política RLS original no te permite insertar en `audit_logs`.
+
+**Solución 2**: Verificar que existe la política para usuarios anónimos:
+
+```sql
+-- Ejecutar en Supabase SQL Editor
+SELECT policyname, cmd, qual
+FROM pg_policies
+WHERE tablename = 'audit_logs'
+AND policyname = 'Anonymous users can insert login failure logs';
+```
+
+Si NO existe, ejecutar:
+```sql
+CREATE POLICY "Anonymous users can insert login failure logs"
+  ON audit_logs
+  FOR INSERT
+  TO anon
+  WITH CHECK (
+    action IN ('LOGIN_FAILED', 'LOGIN_ERROR', 'LOGIN_ATTEMPT')
+  );
+```
+
+Esta política permite que usuarios NO autenticados (anon) inserten logs, pero SOLO si el `action` es uno de los permitidos para login. Esto es seguro porque:
+- Solo permite acciones específicas de login
+- No permite ver logs (SELECT sigue requiriendo admin)
+- No permite insertar otros tipos de logs
+
+**Nota**: Este problema se resolvió en la migración `20260207042000_allow_anonymous_login_logs.sql` que ya fue aplicada automáticamente.
 
 ## Verificación Final
 

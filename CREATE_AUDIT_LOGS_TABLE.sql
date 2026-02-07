@@ -45,6 +45,15 @@ CREATE POLICY "Authenticated users can insert audit logs"
   TO authenticated
   WITH CHECK (true);
 
+-- Política para permitir insertar logs de login fallidos sin autenticación
+CREATE POLICY "Anonymous users can insert login failure logs"
+  ON audit_logs
+  FOR INSERT
+  TO anon
+  WITH CHECK (
+    action IN ('LOGIN_FAILED', 'LOGIN_ERROR', 'LOGIN_ATTEMPT')
+  );
+
 -- Crear índices para mejorar el rendimiento
 CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id ON audit_logs(user_id);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON audit_logs(action);
