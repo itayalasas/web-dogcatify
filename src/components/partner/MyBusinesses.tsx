@@ -3,6 +3,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { Store, Plus, MapPin, Eye } from 'lucide-react';
 import BusinessServices from './BusinessServices';
+import PlaceForm from './PlaceForm';
 
 interface Place {
   id: string;
@@ -22,6 +23,7 @@ const MyBusinesses = () => {
   const [loading, setLoading] = useState(true);
   const [partnerId, setPartnerId] = useState<string | null>(null);
   const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
+  const [showPlaceForm, setShowPlaceForm] = useState(false);
 
   useEffect(() => {
     if (profile?.id) {
@@ -33,19 +35,26 @@ const MyBusinesses = () => {
     if (!profile?.id) return;
 
     try {
+      console.log('Loading partner data for user:', profile.id);
+
       const { data: partner, error } = await supabase
         .from('partners')
-        .select('id')
+        .select('id, business_name, business_type')
         .eq('user_id', profile.id)
         .maybeSingle();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error querying partners:', error);
+        throw error;
+      }
+
+      console.log('Partner data:', partner);
 
       if (partner) {
         setPartnerId(partner.id);
-        loadPlaces(partner.id);
+        await loadPlaces(partner.id);
       } else {
-        console.error('No partner found for user');
+        console.error('No partner found for user:', profile.id);
         setLoading(false);
       }
     } catch (error) {
@@ -55,17 +64,28 @@ const MyBusinesses = () => {
   };
 
   const loadPlaces = async (partnerIdToLoad: string) => {
-    if (!partnerIdToLoad) return;
+    if (!partnerIdToLoad) {
+      console.log('No partner ID provided');
+      return;
+    }
 
     try {
       setLoading(true);
-      const { data, error } = await supabase
+      console.log('Loading places for partner:', partnerIdToLoad);
+
+      const { data, error, count } = await supabase
         .from('places')
-        .select('*')
+        .select('*', { count: 'exact' })
         .eq('partner_id', partnerIdToLoad)
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error querying places:', error);
+        throw error;
+      }
+
+      console.log('Places found:', data?.length || 0, 'Total count:', count);
+      console.log('Places data:', data);
 
       setPlaces(data || []);
     } catch (error) {
@@ -74,6 +94,22 @@ const MyBusinesses = () => {
       setLoading(false);
     }
   };
+
+  const handlePlaceFormClose = () => {
+    setShowPlaceForm(false);
+    if (partnerId) {
+      loadPlaces(partnerId);
+    }
+  };
+
+  if (showPlaceForm && partnerId) {
+    return (
+      <PlaceForm
+        partnerId={partnerId}
+        onClose={handlePlaceFormClose}
+      />
+    );
+  }
 
   if (selectedPlace) {
     return (
@@ -89,6 +125,15 @@ const MyBusinesses = () => {
     return <div className="text-center py-12">Cargando negocios...</div>;
   }
 
+  if (!partnerId) {
+    return (
+      <div className="text-center py-12">
+        <p className="text-red-600 mb-2">No se encontró información de partner para este usuario</p>
+        <p className="text-gray-500">Por favor contacta al administrador</p>
+      </div>
+    );
+  }
+
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
@@ -96,7 +141,10 @@ const MyBusinesses = () => {
           <h2 className="text-2xl font-bold text-gray-900">Mis Negocios</h2>
           <p className="text-gray-600 mt-1">Gestiona tus negocios y sus servicios</p>
         </div>
-        <button className="bg-teal-600 text-white px-4 py-2 rounded-lg hover:bg-teal-700 transition-colors flex items-center">
+        <button
+          onClick={() => setShowPlaceForm(true)}
+          className="bg-teal-600 text-white px-4 py-2 rounded-lg hover:bg-teal-700 transition-colors flex items-center"
+        >
           <Plus className="h-5 w-5 mr-2" />
           Agregar Negocio
         </button>
@@ -146,7 +194,10 @@ const MyBusinesses = () => {
           <Store className="h-16 w-16 text-gray-300 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">No tienes negocios registrados</h3>
           <p className="text-gray-500 mb-4">Comienza agregando tu primer negocio</p>
-          <button className="bg-teal-600 text-white px-6 py-3 rounded-lg hover:bg-teal-700 transition-colors inline-flex items-center">
+          <button
+            onClick={() => setShowPlaceForm(true)}
+            className="bg-teal-600 text-white px-6 py-3 rounded-lg hover:bg-teal-700 transition-colors inline-flex items-center"
+          >
             <Plus className="h-5 w-5 mr-2" />
             Agregar Negocio
           </button>
