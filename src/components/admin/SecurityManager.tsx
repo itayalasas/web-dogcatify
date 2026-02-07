@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, Activity, Key, Clock, AlertTriangle, CheckCircle, XCircle, Search } from 'lucide-react';
+import { Shield, Activity, Key, Clock, AlertTriangle, CheckCircle, XCircle, Search, Bell } from 'lucide-react';
 import { useNotification } from '../../hooks/useNotification';
 import { auditService, AuditLog } from '../../services/audit.service';
+import { alertsService, AlertConfig, AlertThreshold } from '../../services/alerts.service';
 import { supabase } from '../../lib/supabase';
 
 interface SecuritySettings {
@@ -12,10 +13,12 @@ interface SecuritySettings {
 }
 
 const SecurityManager = () => {
-  const [activeTab, setActiveTab] = useState<'logs' | 'settings'>('logs');
+  const [activeTab, setActiveTab] = useState<'logs' | 'settings' | 'alerts'>('logs');
   const [activityLogs, setActivityLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [alertConfig, setAlertConfig] = useState<AlertConfig | null>(null);
+  const [testingAlert, setTestingAlert] = useState<string | null>(null);
   const [settings, setSettings] = useState<SecuritySettings>({
     mfa_enabled: false,
     detailed_logging: true,
@@ -29,6 +32,8 @@ const SecurityManager = () => {
       loadActivityLogs();
     } else if (activeTab === 'settings') {
       loadSettings();
+    } else if (activeTab === 'alerts') {
+      loadAlertConfig();
     }
   }, [activeTab]);
 
@@ -105,6 +110,60 @@ const SecurityManager = () => {
     }
   };
 
+  const loadAlertConfig = async () => {
+    try {
+      setLoading(true);
+      const config = await alertsService.getAlertConfig();
+      setAlertConfig(config);
+    } catch (error) {
+      console.error('Error loading alert config:', error);
+      showNotification('error', 'Error al cargar configuración de alertas');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const saveAlertConfig = async () => {
+    if (!alertConfig) return;
+
+    try {
+      await alertsService.saveAlertConfig(alertConfig);
+      showNotification('success', 'Configuración de alertas guardada correctamente');
+    } catch (error: any) {
+      console.error('Error saving alert config:', error);
+      showNotification('error', 'Error al guardar la configuración de alertas');
+    }
+  };
+
+  const updateAlertThreshold = (alertType: string, updates: Partial<AlertThreshold>) => {
+    if (!alertConfig) return;
+
+    setAlertConfig({
+      ...alertConfig,
+      [alertType]: {
+        ...alertConfig[alertType as keyof AlertConfig],
+        ...updates
+      }
+    });
+  };
+
+  const testAlert = async (alertType: string) => {
+    setTestingAlert(alertType);
+    try {
+      const result = await alertsService.manualCheck(alertType);
+      if (result.triggered) {
+        showNotification('success', 'Alerta enviada: ' + result.message);
+      } else {
+        showNotification('info', result.message);
+      }
+    } catch (error: any) {
+      console.error('Error testing alert:', error);
+      showNotification('error', 'Error al probar la alerta');
+    } finally {
+      setTestingAlert(null);
+    }
+  };
+
   const getActionIcon = (action: string) => {
     switch (action) {
       case 'LOGIN':
@@ -138,6 +197,17 @@ const SecurityManager = () => {
             >
               <Activity className="h-5 w-5" />
               Registro de Actividad
+            </button>
+            <button
+              onClick={() => setActiveTab('alerts')}
+              className={`flex items-center gap-2 px-6 py-3 font-medium transition-colors ${
+                activeTab === 'alerts'
+                  ? 'text-teal-600 border-b-2 border-teal-600'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <Bell className="h-5 w-5" />
+              Alertas
             </button>
             <button
               onClick={() => setActiveTab('settings')}
@@ -240,6 +310,133 @@ const SecurityManager = () => {
                 {searchTerm ? 'No se encontraron registros' : 'No hay registros de auditoría. La tabla audit_logs necesita ser creada.'}
               </div>
             )}
+          </div>
+        )}
+
+        {activeTab === 'alerts' && alertConfig && (
+          <div>
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+              <h3 className="text-lg font-semibold text-gray-800 mb-2">Configuración de Alertas Automáticas</h3>
+              <p className="text-sm text-gray-600 mb-4">
+                Define umbrales para detectar anomalías y recibir notificaciones por email cuando se superen.
+              </p>
+            </div>
+
+            <div className="space-y-6">
+              {Object.entries(alertConfig).map(([key, threshold]) => (
+                <div key={key} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-2">
+                        <h4 className="text-lg font-semibold text-gray-800">{threshold.alert_name}</h4>
+                        <span className={`px-2 py-1 text-xs rounded-full ${
+                          threshold.severity === 'CRITICAL' ? 'bg-red-100 text-red-800' :
+                          threshold.severity === 'HIGH' ? 'bg-orange-100 text-orange-800' :
+                          threshold.severity === 'MEDIUM' ? 'bg-yellow-100 text-yellow-800' :
+                          'bg-blue-100 text-blue-800'
+                        }`}>
+                          {threshold.severity}
+                        </span>
+                      </div>
+                      <p className="text-sm text-gray-600">
+                        {threshold.error_pattern ? `Patrón: ${threshold.error_pattern}` : 'Alerta general de actividad'}
+                      </p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="sr-only peer"
+                        checked={threshold.enabled}
+                        onChange={(e) => updateAlertThreshold(key, { enabled: e.target.checked })}
+                      />
+                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-teal-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-teal-600"></div>
+                    </label>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Umbral de errores
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="100"
+                        value={threshold.threshold_count}
+                        onChange={(e) => updateAlertThreshold(key, { threshold_count: parseInt(e.target.value) })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">Número de errores para disparar la alerta</p>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Ventana de tiempo (minutos)
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="120"
+                        value={threshold.time_window_minutes}
+                        onChange={(e) => updateAlertThreshold(key, { time_window_minutes: parseInt(e.target.value) })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">Tiempo en el que se cuentan los errores</p>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Cooldown (minutos)
+                      </label>
+                      <input
+                        type="number"
+                        min="5"
+                        max="480"
+                        value={threshold.cooldown_minutes}
+                        onChange={(e) => updateAlertThreshold(key, { cooldown_minutes: parseInt(e.target.value) })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">Tiempo mínimo entre alertas del mismo tipo</p>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Email de notificación
+                      </label>
+                      <input
+                        type="email"
+                        value={threshold.notify_email}
+                        onChange={(e) => updateAlertThreshold(key, { notify_email: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">Destinatario de las alertas</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-4 border-t border-gray-200">
+                    <div className="text-sm text-gray-600">
+                      Alerta si hay <strong>{threshold.threshold_count}+ errores</strong> en <strong>{threshold.time_window_minutes} min</strong>
+                    </div>
+                    <button
+                      onClick={() => testAlert(key)}
+                      disabled={testingAlert === key || !threshold.enabled}
+                      className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {testingAlert === key ? 'Probando...' : 'Probar Alerta'}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-6 bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <button
+                onClick={saveAlertConfig}
+                className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors"
+              >
+                Guardar Configuración de Alertas
+              </button>
+            </div>
           </div>
         )}
 

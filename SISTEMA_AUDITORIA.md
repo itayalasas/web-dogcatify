@@ -215,13 +215,26 @@ const searchResults = await auditService.searchLogs('juan@example.com');
 - Los logs incluyen automáticamente el user_id y email del usuario actual
 - RLS (Row Level Security) está habilitado en la tabla
 
+## Sistema de Alertas Integrado
+
+✅ **IMPLEMENTADO**: Sistema completo de alertas automáticas basado en audit_logs
+
+El sistema de auditoría está integrado con un sistema de alertas que:
+- Monitorea automáticamente los logs de error
+- Envía emails cuando se superan umbrales configurables
+- Detecta 5 tipos de anomalías: errores de pago, base de datos, autenticación, API 5xx y actividad sospechosa
+- Panel de configuración en Dashboard Admin → Seguridad → Alertas
+
+**Ver documentación completa**: `SISTEMA_ALERTAS.md`
+
 ## Próximos Pasos
 
-1. Crear la tabla `audit_logs` usando el script SQL proporcionado
+1. ✅ ~~Crear la tabla `audit_logs` usando el script SQL proporcionado~~
 2. Integrar `logAction` y `logResourceAction` en los componentes principales
 3. Considerar implementación de 2FA (autenticación de dos factores)
-4. Configurar alertas automáticas para actividad sospechosa
+4. ✅ ~~Configurar alertas automáticas para actividad sospechosa~~ → Ver SISTEMA_ALERTAS.md
 5. Implementar retención de logs (eliminar logs antiguos después de X días)
+6. Configurar cron job para ejecutar check-alert-thresholds cada 5 minutos
 
 ## Mantenimiento
 
