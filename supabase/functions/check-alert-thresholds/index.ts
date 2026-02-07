@@ -163,6 +163,11 @@ async function checkThreshold(supabase: any, threshold: AlertThreshold): Promise
 
 async function sendAlert(supabase: any, threshold: AlertThreshold, alertKey: string, errorCount: number): Promise<boolean> {
   try {
+    if (errorCount < threshold.threshold_count) {
+      console.log(`[sendAlert] No se envía alerta: errorCount=${errorCount} < threshold=${threshold.threshold_count}`);
+      return false;
+    }
+
     const timeWindow = new Date();
     timeWindow.setMinutes(timeWindow.getMinutes() - threshold.time_window_minutes);
 
