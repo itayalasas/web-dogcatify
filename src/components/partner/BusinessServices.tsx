@@ -90,7 +90,7 @@ const BusinessServices = ({ place, partnerId, onBack }: BusinessServicesProps) =
   if (showForm) {
     return (
       <ServiceForm
-        placeId={place.id}
+        place={place}
         partnerId={partnerId}
         service={editingService}
         onClose={handleFormClose}

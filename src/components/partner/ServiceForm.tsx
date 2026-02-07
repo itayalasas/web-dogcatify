@@ -14,18 +14,24 @@ interface Service {
   iva_rate: number | null;
 }
 
+interface Place {
+  id: string;
+  name: string;
+  category: string;
+}
+
 interface ServiceFormProps {
-  placeId: string;
+  place: Place;
   partnerId: string;
   service: Service | null;
   onClose: () => void;
 }
 
-const ServiceForm = ({ placeId, partnerId, service, onClose }: ServiceFormProps) => {
+const ServiceForm = ({ place, partnerId, service, onClose }: ServiceFormProps) => {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    category: 'paseo_corto',
+    category: '',
     has_cost: true,
     price: '',
     cancellation_hours: '24',
@@ -40,7 +46,7 @@ const ServiceForm = ({ placeId, partnerId, service, onClose }: ServiceFormProps)
       setFormData({
         name: service.name,
         description: service.description || '',
-        category: service.category || 'paseo_corto',
+        category: service.category || '',
         has_cost: service.has_cost,
         price: service.price?.toString() || '',
         cancellation_hours: service.cancellation_hours?.toString() || '24',
@@ -57,10 +63,10 @@ const ServiceForm = ({ placeId, partnerId, service, onClose }: ServiceFormProps)
     try {
       const serviceData = {
         partner_id: partnerId,
-        place_id: placeId,
+        place_id: place.id,
         name: formData.name,
         description: formData.description || null,
-        category: formData.category,
+        category: formData.category || null,
         has_cost: formData.has_cost,
         price: formData.has_cost ? parseFloat(formData.price) : 0,
         cancellation_hours: parseInt(formData.cancellation_hours),
@@ -97,12 +103,19 @@ const ServiceForm = ({ placeId, partnerId, service, onClose }: ServiceFormProps)
     }
   };
 
-  const categories = [
-    { value: 'paseo_corto', label: 'Paseo corto' },
-    { value: 'paseo_largo', label: 'Paseo largo' },
-    { value: 'ejercicio', label: 'Ejercicio' },
-    { value: 'cuidado', label: 'Cuidado' }
-  ];
+  const getCategorySuggestions = () => {
+    const suggestions: Record<string, string[]> = {
+      'paseador': ['Paseo corto', 'Paseo largo', 'Ejercicio', 'Cuidado diario', 'Socialización'],
+      'veterinaria': ['Consulta general', 'Vacunación', 'Cirugía', 'Análisis clínicos', 'Emergencias', 'Desparasitación', 'Control'],
+      'peluqueria': ['Baño completo', 'Corte de pelo', 'Corte de uñas', 'Limpieza de oídos', 'Cepillado', 'Baño express'],
+      'guarderia': ['Guardería diaria', 'Guardería nocturna', 'Media jornada', 'Día completo', 'Fin de semana'],
+      'hotel': ['Habitación estándar', 'Habitación premium', 'Suite', 'Pensión completa', 'Media pensión'],
+      'restaurant': ['Desayuno', 'Almuerzo', 'Cena', 'Merienda', 'Menu del día'],
+      'adiestramiento': ['Obediencia básica', 'Obediencia avanzada', 'Corrección de conducta', 'Socialización', 'Agility']
+    };
+
+    return suggestions[place.category] || ['Consulta', 'Servicio básico', 'Servicio premium', 'Paquete completo'];
+  };
 
   return (
     <div>
@@ -117,7 +130,7 @@ const ServiceForm = ({ placeId, partnerId, service, onClose }: ServiceFormProps)
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 max-w-2xl">
         <div className="text-center mb-6">
           <h2 className="text-2xl font-bold text-gray-900">
-            {service ? 'Editar Servicio' : 'Agregar Servicio de Paseo'}
+            {service ? 'Editar Servicio' : `Agregar Servicio - ${place.name}`}
           </h2>
           <p className="text-gray-600 mt-1">
             Completa la información del servicio que ofreces a tus clientes
@@ -155,24 +168,24 @@ const ServiceForm = ({ placeId, partnerId, service, onClose }: ServiceFormProps)
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Categoría *
+              Categoría
             </label>
-            <div className="flex flex-wrap gap-2">
-              {categories.map((cat) => (
-                <button
-                  key={cat.value}
-                  type="button"
-                  onClick={() => setFormData({ ...formData, category: cat.value })}
-                  className={`px-4 py-2 rounded-full border ${
-                    formData.category === cat.value
-                      ? 'bg-teal-600 text-white border-teal-600'
-                      : 'bg-white text-gray-700 border-gray-300 hover:border-teal-600'
-                  } transition-colors`}
-                >
-                  {cat.label}
-                </button>
+            <input
+              type="text"
+              list="category-suggestions"
+              value={formData.category}
+              onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+              placeholder="Ej: Consulta general, Baño completo, Paseo corto..."
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+            />
+            <datalist id="category-suggestions">
+              {getCategorySuggestions().map((suggestion, index) => (
+                <option key={index} value={suggestion} />
               ))}
-            </div>
+            </datalist>
+            <p className="text-xs text-gray-500 mt-1">
+              Escribe tu propia categoría o selecciona una sugerencia para {place.category}
+            </p>
           </div>
 
           <div className="bg-gray-50 rounded-lg p-4">
