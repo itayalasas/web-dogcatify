@@ -2,12 +2,13 @@
 
 ## Descripción General
 
-Se ha implementado un sistema completo de auditoría para registrar todas las transacciones y acciones importantes en la aplicación DogCatify. Este sistema permite:
+Se ha implementado un sistema completo de auditoría para registrar todas las transacciones y acciones importantes en la aplicación DogCatify (web y móvil). Este sistema permite:
 
 - Registrar todas las acciones de usuarios (LOGIN, CREATE, UPDATE, DELETE, etc.)
 - Rastrear cambios en recursos (bookings, orders, products, partners, etc.)
 - Monitorear actividad sospechosa
 - Cumplir con requisitos de auditoría y compliance
+- **Registrar logs desde la app móvil** (iOS y Android) en la misma tabla
 
 ## Configuración Inicial
 
@@ -258,9 +259,84 @@ Crear alertas para:
 - Accesos desde IPs sospechosas
 - Cambios en configuración crítica
 
+## Integración con App Móvil
+
+El sistema de auditoría está completamente preparado para recibir logs desde la aplicación móvil (iOS/Android).
+
+### Configuración Rápida
+
+**Para el equipo móvil, ver:**
+- 📱 **`APP_MOBILE_CHECKLIST.md`** - Checklist rápido de implementación (5 pasos)
+- 📚 **`INTEGRACION_APP_MOBILE.md`** - Documentación completa con código de ejemplo
+
+### Características Principales
+
+✅ **Misma tabla para web y móvil** - Los logs de ambas plataformas se guardan en `audit_logs`
+
+✅ **RLS ya configurado** - Las políticas permiten insertar logs desde la app:
+- Usuarios autenticados: pueden insertar cualquier log
+- Usuarios anónimos: pueden insertar logs de login fallido
+
+✅ **Información de dispositivo** - Los logs de la app incluyen automáticamente:
+- Platform (ios/android)
+- App version
+- Device model
+- User agent custom
+
+✅ **Código de ejemplo incluido** - Para React Native y Flutter
+
+### Ver Logs de la App
+
+**Dashboard Web:**
+1. Ir a Admin → Seguridad → Registro de Actividad
+2. Los logs de la app tienen `user_agent` con "DogCatify-Mobile"
+3. El campo `details` incluye `platform`, `app_version`, `device_model`
+
+**SQL Query:**
+```sql
+-- Últimos 50 logs de la app móvil
+SELECT
+  created_at,
+  user_email,
+  action,
+  details->>'platform' as platform,
+  details->>'app_version' as version
+FROM audit_logs
+WHERE user_agent LIKE '%DogCatify-Mobile%'
+ORDER BY created_at DESC
+LIMIT 50;
+```
+
+### Prioridades de Implementación en App
+
+**🔴 Alta Prioridad (para alertas de seguridad):**
+- LOGIN_FAILED - Login fallido
+- LOGIN - Login exitoso
+- PAYMENT_FAILED - Pago fallido
+
+**🟡 Media Prioridad:**
+- BOOKING_CREATE - Crear reserva
+- BOOKING_CANCEL - Cancelar reserva
+- PAYMENT_SUCCESS - Pago exitoso
+
 ## Soporte
 
 Para más información o dudas, consultar:
-- Documentación de Supabase: https://supabase.com/docs
-- Archivo: `src/services/audit.service.ts`
-- Componente: `src/components/admin/SecurityManager.tsx`
+
+**Documentación del Sistema:**
+- `SISTEMA_AUDITORIA.md` - Este archivo (documentación general)
+- `SISTEMA_ALERTAS.md` - Sistema de alertas de seguridad
+- `SETUP_SEGURIDAD.md` - Configuración de seguridad
+- `TROUBLESHOOTING_ALERTAS.md` - Guía de resolución de problemas
+
+**Integración Móvil:**
+- `APP_MOBILE_CHECKLIST.md` - Checklist rápido (5 pasos)
+- `INTEGRACION_APP_MOBILE.md` - Documentación completa
+
+**Código Fuente:**
+- Servicio Web: `src/services/audit.service.ts`
+- Panel Admin: `src/components/admin/SecurityManager.tsx`
+- Tabla SQL: `CREATE_AUDIT_LOGS_TABLE.sql`
+
+**Supabase:**
+- Documentación: https://supabase.com/docs
