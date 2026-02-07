@@ -1,63 +1,105 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, Activity, Key, Clock, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
+import { Shield, Activity, Key, Clock, AlertTriangle, CheckCircle, XCircle, Search } from 'lucide-react';
 import { useNotification } from '../../hooks/useNotification';
+import { auditService, AuditLog } from '../../services/audit.service';
+import { supabase } from '../../lib/supabase';
 
-interface ActivityLog {
-  id: string;
-  user_email: string;
-  action: string;
-  resource: string;
-  timestamp: string;
-  ip_address?: string;
-  success: boolean;
+interface SecuritySettings {
+  mfa_enabled: boolean;
+  detailed_logging: boolean;
+  security_notifications: boolean;
+  session_timeout: number;
 }
 
 const SecurityManager = () => {
   const [activeTab, setActiveTab] = useState<'logs' | 'settings'>('logs');
-  const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
+  const [activityLogs, setActivityLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [settings, setSettings] = useState<SecuritySettings>({
+    mfa_enabled: false,
+    detailed_logging: true,
+    security_notifications: true,
+    session_timeout: 60
+  });
   const { showNotification, NotificationContainer } = useNotification();
 
   useEffect(() => {
     if (activeTab === 'logs') {
       loadActivityLogs();
+    } else if (activeTab === 'settings') {
+      loadSettings();
     }
   }, [activeTab]);
 
   const loadActivityLogs = async () => {
     try {
       setLoading(true);
-      setActivityLogs([
-        {
-          id: '1',
-          user_email: 'admin@dogcatify.com',
-          action: 'LOGIN',
-          resource: 'Dashboard',
-          timestamp: new Date().toISOString(),
-          ip_address: '192.168.1.1',
-          success: true
-        },
-        {
-          id: '2',
-          user_email: 'partner@example.com',
-          action: 'UPDATE',
-          resource: 'Booking #ORD-001',
-          timestamp: new Date(Date.now() - 3600000).toISOString(),
-          ip_address: '192.168.1.2',
-          success: true
-        },
-        {
-          id: '3',
-          user_email: 'user@example.com',
-          action: 'DELETE',
-          resource: 'Product',
-          timestamp: new Date(Date.now() - 7200000).toISOString(),
-          ip_address: '192.168.1.3',
-          success: false
-        }
-      ]);
+      const logs = await auditService.getLogs(100);
+      setActivityLogs(logs);
     } catch (error) {
       console.error('Error loading activity logs:', error);
+      showNotification('error', 'Error al cargar logs de auditoría');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadSettings = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('admin_settings')
+        .select('key, value')
+        .in('key', ['mfa_enabled', 'detailed_logging', 'security_notifications', 'session_timeout']);
+
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        const settingsObj: any = { ...settings };
+        data.forEach(item => {
+          settingsObj[item.key] = item.value;
+        });
+        setSettings(settingsObj);
+      }
+    } catch (error) {
+      console.error('Error loading settings:', error);
+    }
+  };
+
+  const saveSettings = async () => {
+    try {
+      const updates = Object.entries(settings).map(([key, value]) => ({
+        key,
+        value,
+        updated_at: new Date().toISOString()
+      }));
+
+      const { error } = await supabase
+        .from('admin_settings')
+        .upsert(updates, { onConflict: 'key' });
+
+      if (error) throw error;
+
+      showNotification('success', 'Configuración guardada correctamente');
+    } catch (error: any) {
+      console.error('Error saving settings:', error);
+      showNotification('error', 'Error al guardar la configuración');
+    }
+  };
+
+  const handleSearch = async () => {
+    if (!searchTerm.trim()) {
+      await loadActivityLogs();
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const logs = await auditService.searchLogs(searchTerm);
+      setActivityLogs(logs);
+    } catch (error) {
+      console.error('Error searching logs:', error);
+      showNotification('error', 'Error al buscar logs');
     } finally {
       setLoading(false);
     }
@@ -113,6 +155,26 @@ const SecurityManager = () => {
 
         {activeTab === 'logs' && (
           <div>
+            <div className="mb-6 flex gap-4">
+              <div className="flex-1 relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+                <input
+                  type="text"
+                  placeholder="Buscar por email, acción o recurso..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                />
+              </div>
+              <button
+                onClick={handleSearch}
+                className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors"
+              >
+                Buscar
+              </button>
+            </div>
+
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full">
@@ -121,7 +183,7 @@ const SecurityManager = () => {
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Fecha/Hora</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Usuario</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Acción</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Recurso</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tipo/ID</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">IP</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Estado</th>
                     </tr>
@@ -133,25 +195,37 @@ const SecurityManager = () => {
                           <div className="flex items-center text-sm">
                             <Clock className="h-4 w-4 mr-2 text-gray-400" />
                             <div>
-                              <div className="text-gray-900">{new Date(log.timestamp).toLocaleDateString()}</div>
-                              <div className="text-xs text-gray-500">{new Date(log.timestamp).toLocaleTimeString()}</div>
+                              <div className="text-gray-900">{new Date(log.created_at).toLocaleDateString()}</div>
+                              <div className="text-xs text-gray-500">{new Date(log.created_at).toLocaleTimeString()}</div>
                             </div>
                           </div>
                         </td>
-                        <td className="px-6 py-4 text-sm text-gray-900">{log.user_email}</td>
+                        <td className="px-6 py-4 text-sm text-gray-900">{log.user_email || 'Sistema'}</td>
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-2">
                             {getActionIcon(log.action)}
                             <span className="text-sm text-gray-900">{log.action}</span>
                           </div>
                         </td>
-                        <td className="px-6 py-4 text-sm text-gray-900">{log.resource}</td>
+                        <td className="px-6 py-4 text-sm">
+                          <div className="text-gray-900">{log.resource_type || 'N/A'}</div>
+                          {log.resource_id && (
+                            <div className="text-xs text-gray-500 font-mono truncate max-w-xs">{log.resource_id}</div>
+                          )}
+                        </td>
                         <td className="px-6 py-4 text-sm text-gray-500 font-mono">{log.ip_address || 'N/A'}</td>
                         <td className="px-6 py-4">
                           {log.success ? (
                             <CheckCircle className="h-5 w-5 text-green-600" />
                           ) : (
-                            <XCircle className="h-5 w-5 text-red-600" />
+                            <div className="group relative">
+                              <XCircle className="h-5 w-5 text-red-600" />
+                              {log.error_message && (
+                                <div className="hidden group-hover:block absolute z-10 w-64 p-2 bg-gray-800 text-white text-xs rounded shadow-lg -left-60 top-0">
+                                  {log.error_message}
+                                </div>
+                              )}
+                            </div>
                           )}
                         </td>
                       </tr>
@@ -163,7 +237,7 @@ const SecurityManager = () => {
 
             {activityLogs.length === 0 && (
               <div className="text-center py-12 text-gray-500">
-                No hay registros de actividad
+                {searchTerm ? 'No se encontraron registros' : 'No hay registros de auditoría. La tabla audit_logs necesita ser creada.'}
               </div>
             )}
           </div>
@@ -176,11 +250,19 @@ const SecurityManager = () => {
             <div className="space-y-6">
               <div className="flex items-center justify-between py-4 border-b border-gray-200">
                 <div>
-                  <h4 className="font-medium text-gray-800">Autenticación de dos factores</h4>
-                  <p className="text-sm text-gray-500">Requiere verificación adicional al iniciar sesión</p>
+                  <h4 className="font-medium text-gray-800 flex items-center gap-2">
+                    Autenticación de dos factores
+                    <span className="text-xs px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full">Próximamente</span>
+                  </h4>
+                  <p className="text-sm text-gray-500">Requiere verificación adicional al iniciar sesión (no implementado aún)</p>
                 </div>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input type="checkbox" className="sr-only peer" />
+                <label className="relative inline-flex items-center cursor-not-allowed opacity-50">
+                  <input
+                    type="checkbox"
+                    className="sr-only peer"
+                    checked={settings.mfa_enabled}
+                    disabled
+                  />
                   <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-teal-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-teal-600"></div>
                 </label>
               </div>
@@ -188,10 +270,15 @@ const SecurityManager = () => {
               <div className="flex items-center justify-between py-4 border-b border-gray-200">
                 <div>
                   <h4 className="font-medium text-gray-800">Registro de actividad detallado</h4>
-                  <p className="text-sm text-gray-500">Registra todas las acciones de los usuarios</p>
+                  <p className="text-sm text-gray-500">Registra todas las acciones de los usuarios en la tabla audit_logs</p>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer">
-                  <input type="checkbox" className="sr-only peer" defaultChecked />
+                  <input
+                    type="checkbox"
+                    className="sr-only peer"
+                    checked={settings.detailed_logging}
+                    onChange={(e) => setSettings({ ...settings, detailed_logging: e.target.checked })}
+                  />
                   <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-teal-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-teal-600"></div>
                 </label>
               </div>
@@ -202,7 +289,12 @@ const SecurityManager = () => {
                   <p className="text-sm text-gray-500">Alertas por email ante actividad sospechosa</p>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer">
-                  <input type="checkbox" className="sr-only peer" defaultChecked />
+                  <input
+                    type="checkbox"
+                    className="sr-only peer"
+                    checked={settings.security_notifications}
+                    onChange={(e) => setSettings({ ...settings, security_notifications: e.target.checked })}
+                  />
                   <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-teal-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-teal-600"></div>
                 </label>
               </div>
@@ -210,9 +302,13 @@ const SecurityManager = () => {
               <div className="flex items-center justify-between py-4">
                 <div>
                   <h4 className="font-medium text-gray-800">Tiempo de sesión</h4>
-                  <p className="text-sm text-gray-500">Duración máxima de la sesión de usuario</p>
+                  <p className="text-sm text-gray-500">Duración máxima de la sesión de usuario (minutos)</p>
                 </div>
-                <select className="border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                <select
+                  className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                  value={settings.session_timeout}
+                  onChange={(e) => setSettings({ ...settings, session_timeout: parseInt(e.target.value) })}
+                >
                   <option value="30">30 minutos</option>
                   <option value="60">1 hora</option>
                   <option value="240">4 horas</option>
@@ -223,7 +319,10 @@ const SecurityManager = () => {
             </div>
 
             <div className="mt-6 pt-6 border-t border-gray-200">
-              <button className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors">
+              <button
+                onClick={saveSettings}
+                className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors"
+              >
                 Guardar Configuración
               </button>
             </div>

@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { logAction } from '../services/audit.service';
 import {
   LogOut,
   Users,
@@ -37,7 +38,18 @@ const AdminDashboard = () => {
   const navigate = useNavigate();
   const [activeSection, setActiveSection] = useState('overview');
 
+  useEffect(() => {
+    logAction('ADMIN_ACCESS', { section: 'dashboard' });
+  }, []);
+
+  useEffect(() => {
+    if (activeSection !== 'overview') {
+      logAction('ADMIN_SECTION_VIEW', { section: activeSection });
+    }
+  }, [activeSection]);
+
   const handleSignOut = async () => {
+    logAction('LOGOUT', { from: 'admin_dashboard' });
     await signOut();
     navigate('/');
   };
