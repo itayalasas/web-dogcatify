@@ -50,7 +50,7 @@ const DEFAULT_ALERT_CONFIG: AlertConfig = {
     alert_name: 'Fallos de Autenticación',
     threshold_count: 10,
     time_window_minutes: 15,
-    error_pattern: 'LOGIN',
+    error_pattern: 'login',
     severity: 'HIGH',
     enabled: true,
     notify_email: 'admin@dogcatify.com',
@@ -197,6 +197,12 @@ export const alertsService = {
       const { data: recentErrors } = await query;
 
       const errorCount = recentErrors?.length || 0;
+
+      if (errorCount < threshold.threshold_count) {
+        console.log(`[sendAlert] No se envía alerta: errorCount=${errorCount} < threshold=${threshold.threshold_count}`);
+        return;
+      }
+
       const uniqueUsers = new Set(recentErrors?.map(e => e.user_email).filter(Boolean)).size;
       const errorMessages = recentErrors?.slice(0, 5).map(e => e.error_message).filter(Boolean) || [];
 

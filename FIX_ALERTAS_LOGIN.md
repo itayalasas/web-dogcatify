@@ -226,3 +226,186 @@ El sistema de alertas ahora funciona correctamente:
 - ✅ El patrón de búsqueda es simple y efectivo
 
 Para futuras alertas, usar patterns simples de una palabra que matcheen claramente con los valores en `action`, `error_message` o `resource_type`.
+
+---
+
+## Actualización: Bug Crítico Corregido (2026-02-07)
+
+### Problema Adicional Encontrado
+
+Se descubrió un **bug crítico** donde el sistema enviaba alertas por email **incluso cuando el conteo de errores era 0**.
+
+**Evidencia en logs:**
+```sql
+INSERT INTO audit_logs VALUES (
+  ...,
+  'ALERT_SENT',
+  'system_alert',
+  'ALT-20260207-02914',
+  '{"severity": "HIGH", "recipient": "admin@dogcatify.com",
+    "alert_type": "authentication_failures", "error_count": 0}',  -- ❌ 0 errores!
+  ...
+);
+```
+
+### Causa del Bug
+
+La función `sendAlert()` en `src/services/alerts.service.ts` **NO validaba** que el conteo de errores alcanzara el umbral antes de enviar el email.
+
+```typescript
+// CÓDIGO ORIGINAL (BUGGY) - Líneas 197-205
+const { data: recentErrors } = await query;
+const errorCount = recentErrors?.length || 0;  // Podía ser 0
+// ❌ NO HABÍA VALIDACIÓN AQUÍ
+const uniqueUsers = new Set(recentErrors?.map(e => e.user_email).filter(Boolean)).size;
+const errorMessages = recentErrors?.slice(0, 5).map(e => e.error_message).filter(Boolean) || [];
+// Continuaba enviando el email sin importar si errorCount era 0
+```
+
+### Solución Aplicada
+
+**Archivo:** `src/services/alerts.service.ts`
+
+Agregada validación después de calcular el `errorCount`:
+
+```typescript
+// CÓDIGO CORREGIDO - Líneas 197-206
+const { data: recentErrors } = await query;
+const errorCount = recentErrors?.length || 0;
+
+// ✅ VALIDACIÓN AGREGADA
+if (errorCount < threshold.threshold_count) {
+  console.log(`[sendAlert] No se envía alerta: errorCount=${errorCount} < threshold=${threshold.threshold_count}`);
+  return;  // Sale sin enviar nada
+}
+
+// Continúa solo si hay errores suficientes
+const uniqueUsers = new Set(recentErrors?.map(e => e.user_email).filter(Boolean)).size;
+const errorMessages = recentErrors?.slice(0, 5).map(e => e.error_message).filter(Boolean) || [];
+// ...envía email
+```
+
+### Validación de la Corrección
+
+#### Test 1: NO envía con 0 errores
+```typescript
+errorCount = 0;
+threshold_count = 2;
+if (0 < 2) {  // true
+  return;  // ✅ Sale sin enviar
+}
+```
+
+#### Test 2: NO envía con errores insuficientes
+```typescript
+errorCount = 1;
+threshold_count = 2;
+if (1 < 2) {  // true
+  return;  // ✅ Sale sin enviar
+}
+```
+
+#### Test 3: SÍ envía con errores suficientes
+```typescript
+errorCount = 2;
+threshold_count = 2;
+if (2 < 2) {  // false
+  // Continúa
+}
+// ✅ Envía email
+```
+
+#### Test 4: SÍ envía cuando supera el umbral
+```typescript
+errorCount = 20;
+threshold_count = 2;
+if (20 < 2) {  // false
+  // Continúa
+}
+// ✅ Envía email
+```
+
+### Segundo Fix: Actualización del Patrón en Base de Datos
+
+El patrón guardado en `admin_settings` era **"login|auth"**, que como se explicó anteriormente, no funciona.
+
+**Actualización realizada:**
+```sql
+UPDATE admin_settings
+SET value = jsonb_set(
+  value::jsonb,
+  '{authentication_failures,error_pattern}',
+  '"login"'::jsonb
+),
+updated_at = NOW()
+WHERE key = 'alert_config';
+```
+
+**Verificación:**
+```sql
+SELECT value->'authentication_failures'->>'error_pattern' as pattern
+FROM admin_settings
+WHERE key = 'alert_config';
+-- Resultado: "login" ✅ (antes era "login|auth" ❌)
+```
+
+### Prueba Completa del Fix
+
+1. **Recarga la aplicación** (para obtener el código corregido)
+
+2. **Genera 2 errores de login:**
+   - Ventana de incógnito
+   - Credenciales incorrectas 2 veces
+
+3. **Ve a Admin → Seguridad → Alertas**
+
+4. **Abre la consola (F12)**
+
+5. **Haz click en "Probar Alerta"**
+
+6. **Verifica en consola:**
+   ```
+   === MANUAL ALERT CHECK ===
+   Pattern: login
+   Threshold: 2
+   Query Result: { count: 2, ... }
+   === END ALERT CHECK ===
+   ```
+
+7. **Resultado esperado:**
+   - ✅ "Alerta enviada. Se encontraron 2 errores (umbral: 2)"
+   - ✅ Email enviado
+   - ✅ Registro en audit_logs con `error_count: 2` (NO 0)
+
+8. **Prueba negativa (sin errores):**
+   - Espera 2 minutos
+   - Prueba alerta de nuevo
+   - ✅ "No se encontraron errores..."
+   - ✅ NO se envía email
+   - ✅ NO se crea registro ALERT_SENT
+
+### Resumen de Cambios (Actualización)
+
+| Cambio | Archivo/Tabla | Motivo |
+|--------|---------------|--------|
+| Validación `if (errorCount < threshold)` | `alerts.service.ts:201-205` | Prevenir envío con 0 errores |
+| Logging de debugging | `alerts.service.ts:203` | Ayudar a diagnosticar problemas |
+| Patrón "login|auth" → "login" | `admin_settings` tabla | Pattern con pipe no funciona |
+| Patrón default "LOGIN" → "login" | `alerts.service.ts:53` | Consistencia (minúsculas) |
+
+### Estado Final del Sistema
+
+- ✅ **NO envía alertas con error_count = 0**
+- ✅ **Patrón "login" funciona correctamente**
+- ✅ **Detecta LOGIN_FAILED en audit_logs**
+- ✅ **Validación robusta contra bugs futuros**
+- ✅ **Logging para debugging**
+- ✅ **Configuración actualizada en DB**
+- ✅ **Build exitoso**
+
+### Lecciones Aprendidas
+
+1. **Siempre validar inputs críticos:** No asumir que funciones previas hicieron las validaciones
+2. **Patterns con pipe no funcionan como OR:** PostgreSQL ILIKE busca el string literal completo
+3. **Testing exhaustivo:** Probar casos extremos (0 errores, 1 error, N errores)
+4. **Logging es esencial:** Ayuda a diagnosticar problemas en producción
