@@ -118,6 +118,13 @@ async function checkThreshold(supabase: any, threshold: AlertThreshold): Promise
     const timeWindow = new Date();
     timeWindow.setMinutes(timeWindow.getMinutes() - threshold.time_window_minutes);
 
+    console.log(`[checkThreshold] Checking ${threshold.alert_type}:`, {
+      time_window_minutes: threshold.time_window_minutes,
+      threshold_count: threshold.threshold_count,
+      error_pattern: threshold.error_pattern,
+      timeWindow: timeWindow.toISOString()
+    });
+
     const { data: recentAlerts } = await supabase
       .from('admin_settings')
       .select('value, updated_at')
@@ -130,6 +137,7 @@ async function checkThreshold(supabase: any, threshold: AlertThreshold): Promise
       cooldownEnd.setMinutes(cooldownEnd.getMinutes() + threshold.cooldown_minutes);
 
       if (new Date() < cooldownEnd) {
+        console.log(`[checkThreshold] In cooldown period until ${cooldownEnd.toISOString()}`);
         return { triggered: false, errorCount: 0 };
       }
     }
@@ -148,15 +156,23 @@ async function checkThreshold(supabase: any, threshold: AlertThreshold): Promise
 
     const { count, error } = await query;
 
-    if (error) throw error;
+    if (error) {
+      console.error('[checkThreshold] Query error:', error);
+      throw error;
+    }
 
     const errorCount = count || 0;
-    return {
-      triggered: errorCount >= threshold.threshold_count,
-      errorCount
-    };
+    const triggered = errorCount >= threshold.threshold_count;
+
+    console.log(`[checkThreshold] Result for ${threshold.alert_type}:`, {
+      errorCount,
+      threshold_count: threshold.threshold_count,
+      triggered
+    });
+
+    return { triggered, errorCount };
   } catch (error) {
-    console.error('Error checking threshold:', error);
+    console.error('[checkThreshold] Error:', error);
     return { triggered: false, errorCount: 0 };
   }
 }
