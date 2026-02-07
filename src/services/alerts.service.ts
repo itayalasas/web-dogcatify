@@ -50,7 +50,7 @@ const DEFAULT_ALERT_CONFIG: AlertConfig = {
     alert_name: 'Fallos de Autenticación',
     threshold_count: 10,
     time_window_minutes: 15,
-    error_pattern: 'LOGIN|login|auth|AUTH|credentials|Credenciales',
+    error_pattern: 'LOGIN',
     severity: 'HIGH',
     enabled: true,
     notify_email: 'admin@dogcatify.com',

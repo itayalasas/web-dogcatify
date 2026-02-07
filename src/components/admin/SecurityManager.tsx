@@ -20,6 +20,9 @@ const SecurityManager = () => {
   const [alertConfig, setAlertConfig] = useState<AlertConfig | null>(null);
   const [testingAlert, setTestingAlert] = useState<string | null>(null);
   const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalLogs, setTotalLogs] = useState(0);
+  const logsPerPage = 50;
   const [settings, setSettings] = useState<SecuritySettings>({
     mfa_enabled: false,
     detailed_logging: true,
@@ -38,11 +41,22 @@ const SecurityManager = () => {
     }
   }, [activeTab]);
 
-  const loadActivityLogs = async () => {
+  const loadActivityLogs = async (page: number = 1) => {
     try {
       setLoading(true);
-      const logs = await auditService.getLogs(100);
-      setActivityLogs(logs);
+      const offset = (page - 1) * logsPerPage;
+
+      const { data: logs, error, count } = await supabase
+        .from('audit_logs')
+        .select('*', { count: 'exact' })
+        .order('created_at', { ascending: false })
+        .range(offset, offset + logsPerPage - 1);
+
+      if (error) throw error;
+
+      setActivityLogs(logs || []);
+      setTotalLogs(count || 0);
+      setCurrentPage(page);
     } catch (error) {
       console.error('Error loading activity logs:', error);
       showNotification('error', 'Error al cargar logs de auditoría');
@@ -95,14 +109,16 @@ const SecurityManager = () => {
 
   const handleSearch = async () => {
     if (!searchTerm.trim()) {
-      await loadActivityLogs();
+      await loadActivityLogs(1);
       return;
     }
 
     try {
       setLoading(true);
-      const logs = await auditService.searchLogs(searchTerm);
+      const logs = await auditService.searchLogs(searchTerm, 50);
       setActivityLogs(logs);
+      setTotalLogs(logs.length);
+      setCurrentPage(1);
     } catch (error) {
       console.error('Error searching logs:', error);
       showNotification('error', 'Error al buscar logs');
@@ -342,6 +358,80 @@ const SecurityManager = () => {
             {activityLogs.length === 0 && (
               <div className="text-center py-12 text-gray-500">
                 {searchTerm ? 'No se encontraron registros' : 'No hay registros de auditoría. La tabla audit_logs necesita ser creada.'}
+              </div>
+            )}
+
+            {activityLogs.length > 0 && totalLogs > logsPerPage && !searchTerm && (
+              <div className="bg-white border-t border-gray-200 px-6 py-4">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm text-gray-700">
+                    Mostrando <span className="font-medium">{(currentPage - 1) * logsPerPage + 1}</span> a{' '}
+                    <span className="font-medium">{Math.min(currentPage * logsPerPage, totalLogs)}</span> de{' '}
+                    <span className="font-medium">{totalLogs}</span> registros
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => loadActivityLogs(currentPage - 1)}
+                      disabled={currentPage === 1 || loading}
+                      className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      Anterior
+                    </button>
+
+                    <div className="flex items-center gap-2">
+                      {Array.from({ length: Math.ceil(totalLogs / logsPerPage) }, (_, i) => i + 1)
+                        .filter(page => {
+                          if (Math.ceil(totalLogs / logsPerPage) <= 7) return true;
+                          if (page === 1 || page === Math.ceil(totalLogs / logsPerPage)) return true;
+                          if (Math.abs(page - currentPage) <= 2) return true;
+                          return false;
+                        })
+                        .map((page, index, array) => {
+                          if (index > 0 && array[index - 1] !== page - 1) {
+                            return (
+                              <React.Fragment key={`gap-${page}`}>
+                                <span className="px-2 text-gray-500">...</span>
+                                <button
+                                  onClick={() => loadActivityLogs(page)}
+                                  disabled={loading}
+                                  className={`px-4 py-2 border rounded-lg text-sm font-medium transition-colors disabled:opacity-50 ${
+                                    currentPage === page
+                                      ? 'bg-teal-600 text-white border-teal-600'
+                                      : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                                  }`}
+                                >
+                                  {page}
+                                </button>
+                              </React.Fragment>
+                            );
+                          }
+                          return (
+                            <button
+                              key={page}
+                              onClick={() => loadActivityLogs(page)}
+                              disabled={loading}
+                              className={`px-4 py-2 border rounded-lg text-sm font-medium transition-colors disabled:opacity-50 ${
+                                currentPage === page
+                                  ? 'bg-teal-600 text-white border-teal-600'
+                                  : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                              }`}
+                            >
+                              {page}
+                            </button>
+                          );
+                        })}
+                    </div>
+
+                    <button
+                      onClick={() => loadActivityLogs(currentPage + 1)}
+                      disabled={currentPage >= Math.ceil(totalLogs / logsPerPage) || loading}
+                      className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      Siguiente
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
           </div>

@@ -1,5 +1,60 @@
 # Troubleshooting: Sistema de Alertas
 
+## ⚠️ PROBLEMA COMÚN: "Se encontraron 0 errores" cuando hay logs
+
+### Síntoma
+
+Al probar la alerta de **Fallos de Autenticación**, muestra:
+```
+No se alcanzó el umbral. Se encontraron 0 errores de 2 necesarios
+```
+
+Pero en **Registro de Actividad** SÍ hay errores de `LOGIN_FAILED` visibles.
+
+### Causa
+
+El patrón de búsqueda (`error_pattern`) usa caracteres `|` (pipe) que NO funcionan como "OR" con PostgREST.
+
+**Pattern INCORRECTO:**
+```
+LOGIN|login|auth|AUTH|credentials
+```
+
+Este pattern busca literalmente el texto completo "LOGIN|login|auth|AUTH|credentials" y NO encuentra nada.
+
+**Pattern CORRECTO:**
+```
+LOGIN
+```
+
+Este pattern simple matchea: `LOGIN_FAILED`, `LOGIN_ERROR`, `LOGIN`
+
+### Solución Rápida
+
+1. Ir a **Dashboard Admin → Seguridad → Alertas**
+2. En **Fallos de Autenticación**, cambiar:
+   - **Patrón actual:** `LOGIN|login|auth|...`
+   - **Patrón nuevo:** `LOGIN`
+3. Hacer clic en **"Guardar Configuración de Alertas"**
+4. Hacer clic en **"Probar Alerta"**
+
+Ahora debería funcionar correctamente.
+
+### Verificar con SQL
+
+```sql
+-- Contar errores con pattern CORRECTO
+SELECT COUNT(*)
+FROM audit_logs
+WHERE success = false
+  AND action ILIKE '%LOGIN%'
+  AND created_at >= NOW() - INTERVAL '5 minutes';
+```
+
+Si este query retorna más de 0, tu alerta debería funcionar.
+
+---
+
 ## Problema: No se envían alertas después de errores de login
 
 ### Checklist de Diagnóstico
