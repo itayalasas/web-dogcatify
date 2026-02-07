@@ -331,7 +331,6 @@ const ManualBooking = ({ onBookingCreated }: ManualBookingProps) => {
       if (profiles && profiles.length > 0) {
         setSearchResults(profiles);
         setShowSearchResults(true);
-        showNotification('success', `${profiles.length} cliente(s) encontrado(s)`);
       } else {
         showNotification('info', 'Cliente no encontrado. Complete los datos manualmente.');
         setSearchResults([]);
