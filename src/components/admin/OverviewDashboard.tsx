@@ -377,9 +377,23 @@ const OverviewDashboard = () => {
       </div>
 
       <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-6">
           <h3 className="text-lg font-semibold text-gray-800">Resumen de Citas</h3>
-          <Calendar className="h-5 w-5 text-teal-600" />
+          <div className="flex items-center gap-6">
+            <div className="text-right">
+              <p className="text-xs text-gray-500">Total Período</p>
+              <p className="text-lg font-bold text-gray-800">
+                {formatNumber(stats.pendingAppointments + stats.completedAppointments)}
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="text-xs text-gray-500">Promedio Diario</p>
+              <p className="text-lg font-bold text-gray-800">
+                {formatNumber(Math.round((stats.pendingAppointments + stats.completedAppointments) / 30))}
+              </p>
+            </div>
+            <Calendar className="h-5 w-5 text-teal-600" />
+          </div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="p-4 bg-yellow-50 rounded-lg border border-yellow-100">
