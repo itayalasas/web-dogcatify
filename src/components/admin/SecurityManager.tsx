@@ -53,7 +53,31 @@ const SecurityManager = () => {
       setLoading(true);
       const offset = (page - 1) * logsPerPage;
 
+      console.log('=== DEBUGGING AUDIT LOGS ===');
       console.log('Loading audit logs, page:', page, 'offset:', offset);
+
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      console.log('Session:', {
+        email: session?.user?.email,
+        id: session?.user?.id,
+        error: sessionError
+      });
+
+      if (!session) {
+        throw new Error('No hay sesión activa');
+      }
+
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('id, email, is_admin')
+        .eq('id', session.user.id)
+        .maybeSingle();
+
+      console.log('Profile:', { profile, error: profileError });
+
+      if (!profile?.is_admin) {
+        throw new Error('Usuario no es administrador');
+      }
 
       const { data: logs, error, count } = await supabase
         .from('audit_logs')
@@ -61,7 +85,12 @@ const SecurityManager = () => {
         .order('created_at', { ascending: false })
         .range(offset, offset + logsPerPage - 1);
 
-      console.log('Audit logs response:', { logs: logs?.length, error, count });
+      console.log('Audit logs response:', {
+        logsCount: logs?.length,
+        totalCount: count,
+        error,
+        firstLog: logs?.[0]
+      });
 
       if (error) {
         console.error('RLS or query error:', error);
@@ -71,6 +100,8 @@ const SecurityManager = () => {
       setActivityLogs(logs || []);
       setTotalLogs(count || 0);
       setCurrentPage(page);
+
+      console.log('=== END DEBUGGING ===');
     } catch (error: any) {
       console.error('Error loading activity logs:', error);
       showNotification('error', `Error al cargar logs: ${error.message || 'Error desconocido'}`);
