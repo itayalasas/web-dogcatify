@@ -32,6 +32,7 @@ import PaymentsManager from './admin/PaymentsManager';
 import ReportsManager from './admin/ReportsManager';
 import NotificationsManager from './admin/NotificationsManager';
 import SecurityManager from './admin/SecurityManager';
+import OverviewDashboard from './admin/OverviewDashboard';
 
 const AdminDashboard = () => {
   const { user, signOut } = useAuth();
@@ -74,53 +75,7 @@ const AdminDashboard = () => {
   const renderContent = () => {
     switch (activeSection) {
       case 'overview':
-        return (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
-              <div className="flex items-center justify-between mb-4">
-                <div className="bg-blue-100 p-3 rounded-lg">
-                  <Users className="h-6 w-6 text-blue-600" />
-                </div>
-                <span className="text-green-600 text-sm font-medium">+12%</span>
-              </div>
-              <h3 className="text-gray-600 text-sm mb-1">Total Usuarios</h3>
-              <p className="text-3xl font-bold text-gray-800">15,847</p>
-            </div>
-
-            <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
-              <div className="flex items-center justify-between mb-4">
-                <div className="bg-teal-100 p-3 rounded-lg">
-                  <Store className="h-6 w-6 text-teal-600" />
-                </div>
-                <span className="text-green-600 text-sm font-medium">+8%</span>
-              </div>
-              <h3 className="text-gray-600 text-sm mb-1">Aliados Activos</h3>
-              <p className="text-3xl font-bold text-gray-800">342</p>
-            </div>
-
-            <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
-              <div className="flex items-center justify-between mb-4">
-                <div className="bg-purple-100 p-3 rounded-lg">
-                  <PawPrint className="h-6 w-6 text-purple-600" />
-                </div>
-                <span className="text-green-600 text-sm font-medium">+15%</span>
-              </div>
-              <h3 className="text-gray-600 text-sm mb-1">Mascotas Registradas</h3>
-              <p className="text-3xl font-bold text-gray-800">23,456</p>
-            </div>
-
-            <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
-              <div className="flex items-center justify-between mb-4">
-                <div className="bg-green-100 p-3 rounded-lg">
-                  <DollarSign className="h-6 w-6 text-green-600" />
-                </div>
-                <span className="text-green-600 text-sm font-medium">+23%</span>
-              </div>
-              <h3 className="text-gray-600 text-sm mb-1">Ingresos Mensuales</h3>
-              <p className="text-3xl font-bold text-gray-800">$45,892</p>
-            </div>
-          </div>
-        );
+        return <OverviewDashboard />;
 
       case 'promotions':
         return <PromotionsManager />;
