@@ -183,7 +183,8 @@ const MyBusinesses = () => {
 
       console.log('Services migrated to new place');
 
-      await loadPlaces(partnerIdToLoad);
+      setPlaces([newPlace]);
+      setLoading(false);
     } catch (error) {
       console.error('Error creating default place:', error);
       setPlaces([]);
