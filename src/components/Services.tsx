@@ -80,10 +80,6 @@ const Services = () => {
                     </div>
                   ))}
                 </div>
-                
-                <button className="w-full mt-6 bg-gray-900 text-white py-3 rounded-lg hover:bg-gray-800 transition-colors">
-                  Agendar Servicio
-                </button>
               </div>
             </div>
           ))}

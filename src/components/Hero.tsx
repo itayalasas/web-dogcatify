@@ -44,16 +44,6 @@ const Hero = () => {
               </div>
             </div>
 
-            {/* CTA Buttons */}
-            <div className="flex flex-col sm:flex-row gap-4">
-              <button className="bg-teal-600 text-white px-8 py-4 rounded-full text-lg font-semibold hover:bg-teal-700 transition-colors shadow-lg">
-                Comenzar Ahora
-              </button>
-              <button className="border-2 border-teal-600 text-teal-600 px-8 py-4 rounded-full text-lg font-semibold hover:bg-teal-50 transition-colors">
-                Ver Demo
-              </button>
-            </div>
-
             {/* Trust indicators */}
             <div className="flex items-center space-x-6 text-sm text-gray-500">
               <div className="flex items-center">
@@ -100,11 +90,6 @@ const Hero = () => {
                       <div className="w-12 h-12 bg-cyan-200 rounded-full"></div>
                     </div>
                   </div>
-                </div>
-                
-                <div className="grid grid-cols-2 gap-3">
-                  <button className="bg-teal-600 text-white py-2 rounded-lg text-sm">Agendar Cita</button>
-                  <button className="border border-teal-600 text-teal-600 py-2 rounded-lg text-sm">Ver Historial</button>
                 </div>
               </div>
             </div>
