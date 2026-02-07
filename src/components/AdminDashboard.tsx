@@ -141,8 +141,8 @@ const AdminDashboard = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="flex">
-        <aside className="w-64 bg-gradient-to-b from-teal-600 to-cyan-700 min-h-screen fixed left-0 top-0">
-          <div className="p-6 border-b border-teal-500">
+        <aside className="w-64 bg-gradient-to-b from-teal-600 to-cyan-700 min-h-screen fixed left-0 top-0 flex flex-col z-40">
+          <div className="p-6 border-b border-teal-500 flex-shrink-0">
             <div className="flex items-center space-x-3">
               <img src="/logo-transp.png" alt="DogCatify" className="h-10 w-10 bg-white rounded-lg p-1" />
               <div>
@@ -152,7 +152,7 @@ const AdminDashboard = () => {
             </div>
           </div>
 
-          <nav className="p-4 space-y-1 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 220px)' }}>
+          <nav className="p-4 space-y-1 overflow-y-auto flex-1">
             {menuItems.map((item) => {
               const Icon = item.icon;
               return (
@@ -172,7 +172,7 @@ const AdminDashboard = () => {
             })}
           </nav>
 
-          <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-teal-500">
+          <div className="p-4 border-t border-teal-500 flex-shrink-0 bg-gradient-to-b from-teal-600 to-cyan-700">
             <div className="bg-teal-700 rounded-lg p-3 mb-3">
               <p className="text-teal-100 text-xs mb-1">Sesión iniciada como:</p>
               <p className="text-white text-sm font-medium truncate">{user?.email}</p>
