@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, Activity, Key, Clock, AlertTriangle, CheckCircle, XCircle, Search, Bell } from 'lucide-react';
+import { Shield, Activity, Key, Clock, AlertTriangle, CheckCircle, XCircle, Search, Bell, RefreshCw, Eye, X } from 'lucide-react';
 import { useNotification } from '../../hooks/useNotification';
 import { auditService, AuditLog } from '../../services/audit.service';
 import { alertsService, AlertConfig, AlertThreshold } from '../../services/alerts.service';
@@ -19,6 +19,7 @@ const SecurityManager = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [alertConfig, setAlertConfig] = useState<AlertConfig | null>(null);
   const [testingAlert, setTestingAlert] = useState<string | null>(null);
+  const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
   const [settings, setSettings] = useState<SecuritySettings>({
     mfa_enabled: false,
     detailed_logging: true,
@@ -151,14 +152,22 @@ const SecurityManager = () => {
     setTestingAlert(alertType);
     try {
       const result = await alertsService.manualCheck(alertType);
+      console.log('Test Alert Result:', result);
+
       if (result.triggered) {
-        showNotification('success', 'Alerta enviada: ' + result.message);
+        showNotification('success', result.message);
+        if (result.details) {
+          console.log('Detalles de la alerta:', result.details);
+        }
       } else {
-        showNotification('info', result.message);
+        showNotification('warning', result.message);
+        if (result.details) {
+          console.log('Detalles:', result.details);
+        }
       }
     } catch (error: any) {
       console.error('Error testing alert:', error);
-      showNotification('error', 'Error al probar la alerta');
+      showNotification('error', 'Error al probar la alerta: ' + error.message);
     } finally {
       setTestingAlert(null);
     }
@@ -243,6 +252,14 @@ const SecurityManager = () => {
               >
                 Buscar
               </button>
+              <button
+                onClick={loadActivityLogs}
+                disabled={loading}
+                className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors flex items-center gap-2 disabled:opacity-50"
+              >
+                <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                Refrescar
+              </button>
             </div>
 
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
@@ -254,8 +271,8 @@ const SecurityManager = () => {
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Usuario</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Acción</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tipo/ID</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">IP</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Estado</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Acciones</th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
@@ -265,17 +282,25 @@ const SecurityManager = () => {
                           <div className="flex items-center text-sm">
                             <Clock className="h-4 w-4 mr-2 text-gray-400" />
                             <div>
-                              <div className="text-gray-900">{new Date(log.created_at).toLocaleDateString()}</div>
-                              <div className="text-xs text-gray-500">{new Date(log.created_at).toLocaleTimeString()}</div>
+                              <div className="text-gray-900">{new Date(log.created_at).toLocaleDateString('es-UY')}</div>
+                              <div className="text-xs text-gray-500">{new Date(log.created_at).toLocaleTimeString('es-UY')}</div>
                             </div>
                           </div>
                         </td>
-                        <td className="px-6 py-4 text-sm text-gray-900">{log.user_email || 'Sistema'}</td>
+                        <td className="px-6 py-4 text-sm">
+                          <div className="text-gray-900">{log.user_email || 'Sistema'}</div>
+                          {log.user_id && (
+                            <div className="text-xs text-gray-500 font-mono">ID: {log.user_id.slice(0, 8)}...</div>
+                          )}
+                        </td>
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-2">
                             {getActionIcon(log.action)}
-                            <span className="text-sm text-gray-900">{log.action}</span>
+                            <span className="text-sm font-medium text-gray-900">{log.action}</span>
                           </div>
+                          {log.error_message && (
+                            <div className="text-xs text-red-600 mt-1 truncate max-w-xs">{log.error_message}</div>
+                          )}
                         </td>
                         <td className="px-6 py-4 text-sm">
                           <div className="text-gray-900">{log.resource_type || 'N/A'}</div>
@@ -283,20 +308,29 @@ const SecurityManager = () => {
                             <div className="text-xs text-gray-500 font-mono truncate max-w-xs">{log.resource_id}</div>
                           )}
                         </td>
-                        <td className="px-6 py-4 text-sm text-gray-500 font-mono">{log.ip_address || 'N/A'}</td>
                         <td className="px-6 py-4">
-                          {log.success ? (
-                            <CheckCircle className="h-5 w-5 text-green-600" />
-                          ) : (
-                            <div className="group relative">
-                              <XCircle className="h-5 w-5 text-red-600" />
-                              {log.error_message && (
-                                <div className="hidden group-hover:block absolute z-10 w-64 p-2 bg-gray-800 text-white text-xs rounded shadow-lg -left-60 top-0">
-                                  {log.error_message}
-                                </div>
-                              )}
-                            </div>
-                          )}
+                          <div className="flex items-center gap-2">
+                            {log.success ? (
+                              <>
+                                <CheckCircle className="h-5 w-5 text-green-600" />
+                                <span className="text-xs text-green-700 font-medium">Éxito</span>
+                              </>
+                            ) : (
+                              <>
+                                <XCircle className="h-5 w-5 text-red-600" />
+                                <span className="text-xs text-red-700 font-medium">Error</span>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <button
+                            onClick={() => setSelectedLog(log)}
+                            className="text-teal-600 hover:text-teal-700 flex items-center gap-1 text-sm"
+                          >
+                            <Eye className="h-4 w-4" />
+                            Ver detalles
+                          </button>
                         </td>
                       </tr>
                     ))}
@@ -310,6 +344,127 @@ const SecurityManager = () => {
                 {searchTerm ? 'No se encontraron registros' : 'No hay registros de auditoría. La tabla audit_logs necesita ser creada.'}
               </div>
             )}
+          </div>
+        )}
+
+        {selectedLog && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-gray-800">Detalles del Log</h3>
+                <button
+                  onClick={() => setSelectedLog(null)}
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">ID del Log</label>
+                    <p className="text-sm text-gray-900 font-mono break-all">{selectedLog.id}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Estado</label>
+                    <div className="flex items-center gap-2 mt-1">
+                      {selectedLog.success ? (
+                        <>
+                          <CheckCircle className="h-5 w-5 text-green-600" />
+                          <span className="text-sm text-green-700 font-medium">Éxito</span>
+                        </>
+                      ) : (
+                        <>
+                          <XCircle className="h-5 w-5 text-red-600" />
+                          <span className="text-sm text-red-700 font-medium">Error</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Fecha/Hora</label>
+                    <p className="text-sm text-gray-900">
+                      {new Date(selectedLog.created_at).toLocaleString('es-UY', {
+                        dateStyle: 'full',
+                        timeStyle: 'medium'
+                      })}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Acción</label>
+                    <p className="text-sm text-gray-900 font-semibold">{selectedLog.action}</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Usuario Email</label>
+                    <p className="text-sm text-gray-900">{selectedLog.user_email || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">User ID</label>
+                    <p className="text-sm text-gray-900 font-mono break-all">{selectedLog.user_id || 'N/A'}</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Tipo de Recurso</label>
+                    <p className="text-sm text-gray-900">{selectedLog.resource_type || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">ID de Recurso</label>
+                    <p className="text-sm text-gray-900 font-mono break-all">{selectedLog.resource_id || 'N/A'}</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Dirección IP</label>
+                    <p className="text-sm text-gray-900 font-mono">{selectedLog.ip_address || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">User Agent</label>
+                    <p className="text-sm text-gray-900 truncate" title={selectedLog.user_agent || 'N/A'}>
+                      {selectedLog.user_agent || 'N/A'}
+                    </p>
+                  </div>
+                </div>
+
+                {selectedLog.error_message && (
+                  <div>
+                    <label className="text-sm font-medium text-red-600">Mensaje de Error</label>
+                    <div className="mt-1 p-3 bg-red-50 border border-red-200 rounded-lg">
+                      <p className="text-sm text-red-800">{selectedLog.error_message}</p>
+                    </div>
+                  </div>
+                )}
+
+                {selectedLog.details && Object.keys(selectedLog.details).length > 0 && (
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Detalles Adicionales</label>
+                    <div className="mt-1 p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                      <pre className="text-xs text-gray-800 whitespace-pre-wrap overflow-x-auto">
+                        {JSON.stringify(selectedLog.details, null, 2)}
+                      </pre>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="sticky bottom-0 bg-gray-50 px-6 py-4 border-t border-gray-200">
+                <button
+                  onClick={() => setSelectedLog(null)}
+                  className="w-full px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+                >
+                  Cerrar
+                </button>
+              </div>
+            </div>
           </div>
         )}
 

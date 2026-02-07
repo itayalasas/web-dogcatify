@@ -50,7 +50,7 @@ const DEFAULT_ALERT_CONFIG: AlertConfig = {
     alert_name: 'Fallos de Autenticación',
     threshold_count: 10,
     time_window_minutes: 15,
-    error_pattern: 'login|auth',
+    error_pattern: 'LOGIN|login|auth|AUTH|credentials|Credenciales',
     severity: 'HIGH',
     enabled: true,
     notify_email: 'admin@dogcatify.com',
@@ -297,7 +297,7 @@ export const alertsService = {
     }
   },
 
-  async manualCheck(alertType: string): Promise<{ triggered: boolean; message: string }> {
+  async manualCheck(alertType: string): Promise<{ triggered: boolean; message: string; details?: any }> {
     const config = await this.getAlertConfig();
     const threshold = config[alertType as keyof AlertConfig];
 
@@ -305,13 +305,69 @@ export const alertsService = {
       return { triggered: false, message: 'Tipo de alerta no encontrado' };
     }
 
-    const shouldAlert = await this.checkThreshold(threshold);
+    const timeWindow = new Date();
+    timeWindow.setMinutes(timeWindow.getMinutes() - threshold.time_window_minutes);
 
-    if (shouldAlert) {
-      await this.sendAlert(threshold, alertType);
-      return { triggered: true, message: 'Alerta enviada correctamente' };
+    let query = supabase
+      .from('audit_logs')
+      .select('id, action, error_message, resource_type, created_at', { count: 'exact' })
+      .eq('success', false)
+      .gte('created_at', timeWindow.toISOString());
+
+    if (threshold.error_pattern) {
+      query = query.or(
+        `error_message.ilike.%${threshold.error_pattern}%,action.ilike.%${threshold.error_pattern}%,resource_type.ilike.%${threshold.error_pattern}%`
+      );
     }
 
-    return { triggered: false, message: 'No se alcanzó el umbral configurado' };
+    const { count, data, error } = await query;
+
+    if (error) {
+      return {
+        triggered: false,
+        message: `Error al consultar logs: ${error.message}`,
+        details: { error: error.message }
+      };
+    }
+
+    const errorCount = count || 0;
+    const shouldAlert = errorCount >= threshold.threshold_count;
+
+    if (shouldAlert) {
+      try {
+        await this.sendAlert(threshold, alertType);
+        return {
+          triggered: true,
+          message: `Alerta enviada. Se encontraron ${errorCount} errores (umbral: ${threshold.threshold_count})`,
+          details: {
+            errorCount,
+            threshold: threshold.threshold_count,
+            recentErrors: data?.slice(0, 5)
+          }
+        };
+      } catch (sendError: any) {
+        return {
+          triggered: true,
+          message: `Se alcanzó el umbral pero falló el envío: ${sendError.message}`,
+          details: {
+            errorCount,
+            threshold: threshold.threshold_count,
+            sendError: sendError.message
+          }
+        };
+      }
+    }
+
+    return {
+      triggered: false,
+      message: `No se alcanzó el umbral. Se encontraron ${errorCount} errores de ${threshold.threshold_count} necesarios en los últimos ${threshold.time_window_minutes} minutos`,
+      details: {
+        errorCount,
+        threshold: threshold.threshold_count,
+        timeWindow: threshold.time_window_minutes,
+        pattern: threshold.error_pattern,
+        recentErrors: data?.slice(0, 5)
+      }
+    };
   }
 };

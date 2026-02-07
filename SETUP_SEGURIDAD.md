@@ -273,6 +273,8 @@ WHERE key = 'alert_config';
 4. Email destino es válido
 5. Función send-email funciona
 
+**Guía completa**: Ver `TROUBLESHOOTING_ALERTAS.md` para diagnóstico paso a paso
+
 ### Email no llega
 
 **Verificar**:
@@ -280,6 +282,14 @@ WHERE key = 'alert_config';
 2. Credenciales de email configuradas en send-email
 3. Revisar carpeta de spam
 4. Ver logs de send-email function
+
+### Los errores de login no se registran
+
+**Verificar**:
+1. El componente Login tiene `import { logError } from '../services/audit.service'`
+2. Estás intentando login con credenciales **incorrectas**
+3. Revisar consola del navegador para errores JS
+4. Hacer clic en "Refrescar" en el panel de logs después de intentar login
 
 ## Próximos Pasos
 

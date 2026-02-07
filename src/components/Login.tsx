@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Lock, Mail, LogIn, AlertCircle } from 'lucide-react';
+import { logAction, logError } from '../services/audit.service';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -20,11 +21,26 @@ const Login = () => {
       const { error } = await signIn(email, password);
       if (error) {
         setError('Credenciales incorrectas. Por favor verifica tu email y contraseña.');
+
+        logError('LOGIN_FAILED', 'Credenciales incorrectas', {
+          email: email,
+          error_code: error.status || 'unknown',
+          error_message: error.message || 'Invalid credentials'
+        });
       } else {
+        logAction('LOGIN', {
+          email: email,
+          method: 'email_password'
+        });
         navigate('/dashboard');
       }
-    } catch (err) {
+    } catch (err: any) {
       setError('Ocurrió un error al iniciar sesión. Intenta de nuevo.');
+
+      logError('LOGIN_ERROR', err?.message || 'Error desconocido al iniciar sesión', {
+        email: email,
+        error_type: 'exception'
+      });
     } finally {
       setLoading(false);
     }
