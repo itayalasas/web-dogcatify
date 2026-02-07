@@ -1,14 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { productsService, PartnerProduct } from '../../services/admin.service';
-import { Plus, Edit, Trash2, ToggleLeft, ToggleRight, X, Save, Package } from 'lucide-react';
+import { Plus, Edit, Trash2, ToggleLeft, ToggleRight, X, Save, Package, Search } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useNotification } from '../../hooks/useNotification';
 
+interface Partner {
+  id: string;
+  business_name: string;
+}
+
 const ProductsManager = () => {
   const [products, setProducts] = useState<PartnerProduct[]>([]);
+  const [filteredProducts, setFilteredProducts] = useState<PartnerProduct[]>([]);
+  const [partners, setPartners] = useState<Partner[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<PartnerProduct | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
   const { showNotification, NotificationContainer } = useNotification();
   const [formData, setFormData] = useState({
     name: '',
@@ -16,23 +24,74 @@ const ProductsManager = () => {
     price: '',
     stock: '',
     category: '',
+    partner_id: '',
     is_active: true
   });
 
   useEffect(() => {
     loadProducts();
+    loadPartners();
   }, []);
+
+  useEffect(() => {
+    filterProducts();
+  }, [searchTerm, products]);
 
   const loadProducts = async () => {
     try {
       setLoading(true);
       const data = await productsService.getAll();
       setProducts(data);
+      setFilteredProducts(data);
     } catch (error) {
       console.error('Error loading products:', error);
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadPartners = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('partners')
+        .select('id, business_name')
+        .order('business_name');
+
+      if (error) throw error;
+      setPartners(data || []);
+    } catch (error) {
+      console.error('Error loading partners:', error);
+    }
+  };
+
+  const filterProducts = () => {
+    if (!searchTerm.trim()) {
+      setFilteredProducts(products);
+      return;
+    }
+
+    const term = searchTerm.toLowerCase();
+    const filtered = products.filter(product =>
+      product.name.toLowerCase().includes(term) ||
+      product.description?.toLowerCase().includes(term) ||
+      product.category?.toLowerCase().includes(term) ||
+      product.partner_name?.toLowerCase().includes(term)
+    );
+    setFilteredProducts(filtered);
+  };
+
+  const handleCreate = () => {
+    setEditingProduct(null);
+    setFormData({
+      name: '',
+      description: '',
+      price: '',
+      stock: '',
+      category: '',
+      partner_id: '',
+      is_active: true
+    });
+    setShowModal(true);
   };
 
   const handleEdit = (product: PartnerProduct) => {
@@ -43,6 +102,7 @@ const ProductsManager = () => {
       price: product.price.toString(),
       stock: product.stock?.toString() || '',
       category: product.category || '',
+      partner_id: product.partner_id || '',
       is_active: product.is_active || true
     });
     setShowModal(true);
@@ -51,29 +111,39 @@ const ProductsManager = () => {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!editingProduct) return;
-
     try {
-      const { error } = await supabase
-        .from('partner_products')
-        .update({
-          name: formData.name,
-          description: formData.description,
-          price: parseFloat(formData.price),
-          stock: formData.stock ? parseInt(formData.stock) : null,
-          category: formData.category || null,
-          is_active: formData.is_active
-        })
-        .eq('id', editingProduct.id);
+      const productData = {
+        name: formData.name,
+        description: formData.description,
+        price: parseFloat(formData.price),
+        stock: formData.stock ? parseInt(formData.stock) : null,
+        category: formData.category || null,
+        partner_id: formData.partner_id || null,
+        is_active: formData.is_active
+      };
 
-      if (error) throw error;
+      if (editingProduct) {
+        const { error } = await supabase
+          .from('partner_products')
+          .update(productData)
+          .eq('id', editingProduct.id);
+
+        if (error) throw error;
+        showNotification('success', 'Producto actualizado correctamente');
+      } else {
+        const { error } = await supabase
+          .from('partner_products')
+          .insert([productData]);
+
+        if (error) throw error;
+        showNotification('success', 'Producto creado correctamente');
+      }
 
       setShowModal(false);
       await loadProducts();
-      showNotification('success', 'Producto actualizado correctamente');
     } catch (error: any) {
-      console.error('Error updating product:', error);
-      showNotification('error', 'No se pudo actualizar el producto. Por favor, intente nuevamente.');
+      console.error('Error saving product:', error);
+      showNotification('error', `No se pudo ${editingProduct ? 'actualizar' : 'crear'} el producto. Por favor, intente nuevamente.`);
     }
   };
 
@@ -113,8 +183,28 @@ const ProductsManager = () => {
     <>
       <NotificationContainer />
       <div>
+      <div className="mb-6 flex flex-col sm:flex-row gap-4">
+        <div className="flex-1 relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+          <input
+            type="text"
+            placeholder="Buscar productos por nombre, descripción, categoría o partner..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+          />
+        </div>
+        <button
+          onClick={handleCreate}
+          className="flex items-center gap-2 px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors"
+        >
+          <Plus className="h-5 w-5" />
+          Crear Producto
+        </button>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-        {products.map((product) => (
+        {filteredProducts.map((product) => (
           <div key={product.id} className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
             {product.images && product.images.length > 0 ? (
               <img src={product.images[0]} alt={product.name} className="w-full h-48 object-cover" />
@@ -171,9 +261,9 @@ const ProductsManager = () => {
         ))}
       </div>
 
-      {products.length === 0 && (
+      {filteredProducts.length === 0 && (
         <div className="text-center py-12 text-gray-500">
-          No hay productos registrados
+          {searchTerm ? 'No se encontraron productos con ese criterio' : 'No hay productos registrados'}
         </div>
       )}
 
@@ -182,13 +272,32 @@ const ProductsManager = () => {
           <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold text-gray-800">Editar Producto</h2>
+                <h2 className="text-2xl font-bold text-gray-800">
+                  {editingProduct ? 'Editar Producto' : 'Crear Producto'}
+                </h2>
                 <button onClick={() => setShowModal(false)} className="text-gray-500 hover:text-gray-700">
                   <X className="h-6 w-6" />
                 </button>
               </div>
 
               <form onSubmit={handleSave} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Partner {!editingProduct && '*'}</label>
+                  <select
+                    value={formData.partner_id}
+                    onChange={(e) => setFormData({ ...formData, partner_id: e.target.value })}
+                    required={!editingProduct}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                  >
+                    <option value="">Seleccionar Partner</option>
+                    {partners.map((partner) => (
+                      <option key={partner.id} value={partner.id}>
+                        {partner.business_name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Nombre *</label>
                   <input

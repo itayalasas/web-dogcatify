@@ -30,6 +30,7 @@ import ProductsManager from './admin/ProductsManager';
 import PaymentsManager from './admin/PaymentsManager';
 import ReportsManager from './admin/ReportsManager';
 import NotificationsManager from './admin/NotificationsManager';
+import SecurityManager from './admin/SecurityManager';
 
 const AdminDashboard = () => {
   const { user, signOut } = useAuth();
@@ -141,6 +142,9 @@ const AdminDashboard = () => {
 
       case 'notifications':
         return <NotificationsManager />;
+
+      case 'security':
+        return <SecurityManager />;
 
       case 'settings':
         return <SettingsManager />;
