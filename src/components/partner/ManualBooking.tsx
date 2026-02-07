@@ -1,8 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Clock, User, Phone, Mail, PawPrint, DollarSign, Plus, Search, X } from 'lucide-react';
+import { Calendar, Clock, User, Phone, Mail, PawPrint, DollarSign, Plus, Search, X, Store } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useNotification } from '../../hooks/useNotification';
 import { useAuth } from '../../contexts/AuthContext';
+
+interface Place {
+  id: string;
+  name: string;
+  category: string;
+  address: string;
+}
 
 interface Service {
   id: string;
@@ -39,6 +46,7 @@ interface ManualBookingProps {
 const ManualBooking = ({ onBookingCreated }: ManualBookingProps) => {
   const { user } = useAuth();
   const { showNotification, NotificationContainer } = useNotification();
+  const [places, setPlaces] = useState<Place[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [pets, setPets] = useState<Pet[]>([]);
   const [loading, setLoading] = useState(false);
@@ -50,6 +58,7 @@ const ManualBooking = ({ onBookingCreated }: ManualBookingProps) => {
   const [searchType, setSearchType] = useState<'email' | 'phone' | 'name'>('email');
   const [availableTimeSlots, setAvailableTimeSlots] = useState<TimeSlot[]>([]);
   const [formData, setFormData] = useState({
+    place_id: '',
     service_id: '',
     customer_id: '',
     customer_email: '',
@@ -82,7 +91,7 @@ const ManualBooking = ({ onBookingCreated }: ManualBookingProps) => {
       if (partner) {
         setPartnerId(partner.id);
         setPartnerName(partner.business_name);
-        loadServices(partner.id);
+        loadPlaces(partner.id);
       } else {
         showNotification('error', 'No se encontró información del partner');
       }
@@ -92,19 +101,43 @@ const ManualBooking = ({ onBookingCreated }: ManualBookingProps) => {
     }
   };
 
-  const loadServices = async (partnerIdToLoad: string) => {
+  const loadPlaces = async (partnerIdToLoad: string) => {
     try {
-      if (!partnerIdToLoad) {
-        console.error('No partner ID available');
+      const { data, error } = await supabase
+        .from('places')
+        .select('id, name, category, address')
+        .eq('partner_id', partnerIdToLoad)
+        .eq('is_active', true)
+        .order('name');
+
+      if (error) throw error;
+
+      console.log('Places loaded:', data);
+      setPlaces(data || []);
+
+      if (!data || data.length === 0) {
+        showNotification('warning', 'No tienes negocios activos. Por favor crea un negocio primero en "Mis Servicios".');
+      }
+    } catch (error: any) {
+      console.error('Error loading places:', error);
+      showNotification('error', 'Error al cargar negocios');
+    }
+  };
+
+  const loadServices = async (placeId: string) => {
+    try {
+      if (!placeId) {
+        console.error('No place ID available');
+        setServices([]);
         return;
       }
 
-      console.log('Loading services for partner:', partnerIdToLoad);
+      console.log('Loading services for place:', placeId);
 
       const { data, error } = await supabase
         .from('partner_services')
         .select('id, name, price, duration, category, is_active')
-        .eq('partner_id', partnerIdToLoad)
+        .eq('place_id', placeId)
         .eq('is_active', true)
         .order('name');
 
@@ -117,7 +150,7 @@ const ManualBooking = ({ onBookingCreated }: ManualBookingProps) => {
       setServices(data || []);
 
       if (!data || data.length === 0) {
-        showNotification('warning', 'No tienes servicios activos disponibles para agendar citas.');
+        showNotification('info', 'Este negocio no tiene servicios activos. Por favor agrega servicios en "Mis Servicios".');
       } else {
         console.log(`${data.length} servicios cargados correctamente`);
       }
@@ -258,6 +291,15 @@ const ManualBooking = ({ onBookingCreated }: ManualBookingProps) => {
   };
 
   useEffect(() => {
+    if (formData.place_id) {
+      loadServices(formData.place_id);
+      setFormData(prev => ({ ...prev, service_id: '' }));
+    } else {
+      setServices([]);
+    }
+  }, [formData.place_id]);
+
+  useEffect(() => {
     if (formData.date && formData.service_id) {
       loadAvailableTimeSlots(formData.date, formData.service_id);
     }
@@ -331,6 +373,12 @@ const ManualBooking = ({ onBookingCreated }: ManualBookingProps) => {
     setLoading(true);
 
     try {
+      if (!formData.place_id) {
+        showNotification('error', 'Debe seleccionar un negocio');
+        setLoading(false);
+        return;
+      }
+
       if (!formData.service_id || !formData.date || !formData.time) {
         showNotification('error', 'Complete todos los campos obligatorios');
         setLoading(false);
@@ -640,6 +688,7 @@ const ManualBooking = ({ onBookingCreated }: ManualBookingProps) => {
       }
 
       setFormData({
+        place_id: '',
         service_id: '',
         customer_id: '',
         customer_email: '',
@@ -655,6 +704,7 @@ const ManualBooking = ({ onBookingCreated }: ManualBookingProps) => {
       setPets([]);
       setSearchResults([]);
       setSearchTerm('');
+      setServices([]);
     } catch (error: any) {
       console.error('Error creating booking:', error);
       showNotification('error', error.message || 'Error al crear la cita');
@@ -843,21 +893,49 @@ const ManualBooking = ({ onBookingCreated }: ManualBookingProps) => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Negocio *
+                  </label>
+                  <select
+                    value={formData.place_id}
+                    onChange={(e) => setFormData({ ...formData, place_id: e.target.value })}
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                  >
+                    <option value="">Seleccione un negocio</option>
+                    {places.map((place) => (
+                      <option key={place.id} value={place.id}>
+                        {place.name} - {place.category}
+                      </option>
+                    ))}
+                  </select>
+                  {places.length === 0 && (
+                    <p className="text-xs text-amber-600 mt-1">No tienes negocios activos</p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
                     Servicio *
                   </label>
                   <select
                     value={formData.service_id}
                     onChange={(e) => setFormData({ ...formData, service_id: e.target.value })}
                     required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                    disabled={!formData.place_id}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
                   >
-                    <option value="">Seleccione un servicio</option>
+                    <option value="">
+                      {!formData.place_id ? 'Primero seleccione un negocio' : 'Seleccione un servicio'}
+                    </option>
                     {services.map((service) => (
                       <option key={service.id} value={service.id}>
                         {service.name} - ${service.price} ({service.duration}min)
                       </option>
                     ))}
                   </select>
+                  {formData.place_id && services.length === 0 && (
+                    <p className="text-xs text-amber-600 mt-1">Este negocio no tiene servicios activos</p>
+                  )}
                 </div>
 
                 <div>
