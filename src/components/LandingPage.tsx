@@ -5,6 +5,7 @@ import Features from './Features';
 import Services from './Services';
 import Contact from './Contact';
 import Footer from './Footer';
+import FloatingChatbot from './FloatingChatbot';
 
 const LandingPage = () => {
   return (
@@ -15,6 +16,7 @@ const LandingPage = () => {
       <Services />
       <Contact />
       <Footer />
+      <FloatingChatbot />
     </div>
   );
 };
