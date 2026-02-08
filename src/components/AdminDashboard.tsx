@@ -18,6 +18,7 @@ import {
   Shield,
   PawPrint,
   Megaphone,
+  MessageCircle,
 } from 'lucide-react';
 import PromotionsManager from './admin/PromotionsManager';
 import PlacesManager from './admin/PlacesManager';
@@ -33,6 +34,7 @@ import ReportsManager from './admin/ReportsManager';
 import NotificationsManager from './admin/NotificationsManager';
 import SecurityManager from './admin/SecurityManager';
 import OverviewDashboard from './admin/OverviewDashboard';
+import ChatbotManager from './admin/ChatbotManager';
 
 const AdminDashboard = () => {
   const { user, signOut } = useAuth();
@@ -57,6 +59,7 @@ const AdminDashboard = () => {
 
   const menuItems = [
     { id: 'overview', label: 'Vista General', icon: BarChart3 },
+    { id: 'chatbot', label: 'Chat Dotty', icon: MessageCircle },
     { id: 'promotions', label: 'Promociones', icon: Megaphone },
     { id: 'places', label: 'Lugares Pet-Friendly', icon: MapPin },
     { id: 'partners', label: 'Aliados', icon: Store },
@@ -76,6 +79,9 @@ const AdminDashboard = () => {
     switch (activeSection) {
       case 'overview':
         return <OverviewDashboard />;
+
+      case 'chatbot':
+        return <ChatbotManager />;
 
       case 'promotions':
         return <PromotionsManager />;
