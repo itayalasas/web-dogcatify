@@ -38,12 +38,14 @@ const Login = () => {
         });
         navigate('/dashboard');
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setError('Ocurrió un error al iniciar sesión. Intenta de nuevo.');
+
+      const message = err instanceof Error ? err.message : 'Error desconocido al iniciar sesión';
 
       logError(
         'LOGIN_ERROR',
-        err?.message || 'Error desconocido al iniciar sesión',
+        message,
         {
           error_type: 'exception'
         },
@@ -55,20 +57,20 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-teal-50 via-cyan-50 to-blue-50 flex items-center justify-center px-4 py-12">
+    <div className="min-h-[100dvh] bg-gradient-to-br from-teal-50 via-cyan-50 to-blue-50 flex items-center justify-center px-4 py-6 sm:py-12">
       <div className="max-w-md w-full">
-        <div className="bg-white rounded-2xl shadow-2xl overflow-hidden">
-          <div className="bg-gradient-to-r from-teal-500 to-cyan-600 px-8 py-12 text-center">
+        <div className="bg-white rounded-xl sm:rounded-2xl shadow-xl sm:shadow-2xl overflow-hidden">
+          <div className="bg-gradient-to-r from-teal-500 to-cyan-600 px-5 sm:px-8 py-8 sm:py-12 text-center">
             <img
               src="/logo-transp.png"
               alt="DogCatify"
-              className="h-20 w-20 mx-auto mb-4 bg-white rounded-full p-2"
+              className="h-16 w-16 sm:h-20 sm:w-20 mx-auto mb-4 bg-white rounded-full p-1.5 sm:p-2"
             />
-            <h1 className="text-3xl font-bold text-white mb-2">Bienvenido</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2">Bienvenido</h1>
             <p className="text-teal-100">Inicia sesión en tu cuenta</p>
           </div>
 
-          <div className="px-8 py-10">
+          <div className="px-5 sm:px-8 py-8 sm:py-10">
             {error && (
               <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4 flex items-start">
                 <AlertCircle className="h-5 w-5 text-red-600 mr-3 flex-shrink-0 mt-0.5" />
@@ -76,7 +78,7 @@ const Login = () => {
               </div>
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-6">
+            <form onSubmit={handleSubmit} className="space-y-6" aria-busy={loading}>
               <div>
                 <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
                   Correo Electrónico
@@ -87,10 +89,15 @@ const Login = () => {
                   </div>
                   <input
                     id="email"
+                    name="email"
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all"
+                    inputMode="email"
+                    autoComplete="email"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    className="block w-full pl-10 pr-3 py-3 text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all"
                     placeholder="tu@email.com"
                     required
                   />
@@ -107,10 +114,12 @@ const Login = () => {
                   </div>
                   <input
                     id="password"
+                    name="password"
                     type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all"
+                    autoComplete="current-password"
+                    className="block w-full pl-10 pr-3 py-3 text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all"
                     placeholder="••••••••"
                     required
                   />
@@ -150,7 +159,7 @@ const Login = () => {
         <div className="mt-8 text-center">
           <button
             onClick={() => navigate('/')}
-            className="text-gray-600 hover:text-gray-800 font-medium"
+            className="text-gray-600 hover:text-gray-800 font-medium py-2"
           >
             ← Volver al inicio
           </button>
