@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { partnersService, Partner } from '../../services/admin.service';
-import { Store, Mail, Phone, MapPin, Star, CheckCircle, XCircle, ToggleLeft, ToggleRight, Edit2, DollarSign } from 'lucide-react';
+import { Store, Phone, MapPin, Star, CheckCircle, XCircle, ToggleLeft, ToggleRight, Edit2, DollarSign, Eye } from 'lucide-react';
+import PartnerProfileModal from './PartnerProfileModal';
 
 const PartnersManager = () => {
   const [partners, setPartners] = useState<Partner[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingCommission, setEditingCommission] = useState<string | null>(null);
   const [commissionValue, setCommissionValue] = useState('');
+  const [selectedPartner, setSelectedPartner] = useState<Partner | null>(null);
 
   useEffect(() => {
     loadPartners();
@@ -71,6 +73,7 @@ const PartnersManager = () => {
 
   return (
     <div>
+      {selectedPartner && <PartnerProfileModal partner={selectedPartner} onClose={() => setSelectedPartner(null)} onSaved={() => { setSelectedPartner(null); loadPartners(); }} />}
       <div className="mb-6">
         <h3 className="text-2xl font-semibold text-gray-800 mb-2">Gestión de Aliados</h3>
         <p className="text-gray-600">
@@ -229,6 +232,13 @@ const PartnersManager = () => {
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex flex-col gap-2">
+                      <button
+                        onClick={() => setSelectedPartner(partner)}
+                        className="inline-flex items-center justify-center px-3 py-1 text-xs bg-[#DCEBE7] text-[#2D6A6F] rounded hover:bg-[#cfe4df] transition-colors"
+                      >
+                        <Eye className="h-4 w-4 mr-1" />
+                        Ver perfil
+                      </button>
                       <button
                         onClick={() => handleToggleActive(partner.id, partner.is_active || false)}
                         className="inline-flex items-center justify-center px-3 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors"

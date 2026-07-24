@@ -1,171 +1,89 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { AlertCircle, ArrowLeft, Check, Eye, EyeOff, Lock, LogIn, Mail } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { Lock, Mail, LogIn, AlertCircle } from 'lucide-react';
 import { logAction, logError } from '../services/audit.service';
+import './login.css';
 
 const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { signIn } = useAuth();
   const navigate = useNavigate();
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
     setError('');
     setLoading(true);
-
     try {
-      const { error } = await signIn(email, password);
-      if (error) {
-        setError('Credenciales incorrectas. Por favor verifica tu email y contraseña.');
-
-        logError(
-          'LOGIN_FAILED',
-          'Credenciales incorrectas',
-          {
-            error_code: error.status || 'unknown',
-            error_message: error.message || 'Invalid credentials'
-          },
-          email
-        );
-      } else {
-        logAction('LOGIN', {
-          email: email,
-          method: 'email_password'
-        });
-        navigate('/dashboard');
+      const { error: authError } = await signIn(email, password);
+      if (authError) {
+        setError('Credenciales incorrectas. Verificá tu correo y contraseña.');
+        logError('LOGIN_FAILED', 'Credenciales incorrectas', {
+          error_code: authError.status || 'unknown',
+          error_message: authError.message || 'Invalid credentials',
+        }, email);
+        return;
       }
-    } catch (err: unknown) {
-      setError('Ocurrió un error al iniciar sesión. Intenta de nuevo.');
-
-      const message = err instanceof Error ? err.message : 'Error desconocido al iniciar sesión';
-
-      logError(
-        'LOGIN_ERROR',
-        message,
-        {
-          error_type: 'exception'
-        },
-        email
-      );
+      logAction('LOGIN', { email, method: 'email_password' });
+      navigate('/dashboard');
+    } catch (reason) {
+      setError('Ocurrió un error al iniciar sesión. Intentá nuevamente.');
+      logError('LOGIN_ERROR', reason instanceof Error ? reason.message : 'Error desconocido', {
+        error_type: 'exception',
+      }, email);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-[100dvh] bg-gradient-to-br from-teal-50 via-cyan-50 to-blue-50 flex items-center justify-center px-4 py-6 sm:py-12">
-      <div className="max-w-md w-full">
-        <div className="bg-white rounded-xl sm:rounded-2xl shadow-xl sm:shadow-2xl overflow-hidden">
-          <div className="bg-gradient-to-r from-teal-500 to-cyan-600 px-5 sm:px-8 py-8 sm:py-12 text-center">
-            <img
-              src="/logo-transp.png"
-              alt="DogCatify"
-              className="h-16 w-16 sm:h-20 sm:w-20 mx-auto mb-4 bg-white rounded-full p-1.5 sm:p-2"
-            />
-            <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2">Bienvenido</h1>
-            <p className="text-teal-100">Inicia sesión en tu cuenta</p>
+    <main className="partner-login">
+      <a href="#acceso" className="partner-login-skip">Saltar al formulario</a>
+      <section className="partner-login-story">
+        <button type="button" onClick={() => navigate('/')} className="partner-login-brand">
+          <img src="/logo-transp.png" alt="" /><span>DogCatiFy</span>
+        </button>
+        <div className="partner-login-copy">
+          <p className="partner-login-eyebrow">Portal de aliados</p>
+          <h1>Tu negocio,<br /><em>más cerca.</em></h1>
+          <p>Gestioná reservas, servicios y oportunidades desde un espacio pensado para hacer crecer tu propuesta.</p>
+          <ul>
+            <li><Check /> Reservas y agenda en un solo lugar</li>
+            <li><Check /> Servicios, productos y promociones</li>
+            <li><Check /> Métricas claras para decidir mejor</li>
+          </ul>
+        </div>
+        <p className="partner-login-note">Hecho en Uruguay para quienes cuidan a nuestras mascotas.</p>
+      </section>
+
+      <section className="partner-login-access" id="acceso">
+        <div className="partner-login-card">
+          <button type="button" onClick={() => navigate('/')} className="partner-login-back"><ArrowLeft /> Volver al inicio</button>
+          <div className="partner-login-heading">
+            <p className="partner-login-eyebrow">Acceso seguro</p>
+            <h2>Bienvenido de nuevo.</h2>
+            <p>Ingresá con tu cuenta de administrador o aliado.</p>
           </div>
-
-          <div className="px-5 sm:px-8 py-8 sm:py-10">
-            {error && (
-              <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4 flex items-start">
-                <AlertCircle className="h-5 w-5 text-red-600 mr-3 flex-shrink-0 mt-0.5" />
-                <p className="text-red-800 text-sm">{error}</p>
-              </div>
-            )}
-
-            <form onSubmit={handleSubmit} className="space-y-6" aria-busy={loading}>
-              <div>
-                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-                  Correo Electrónico
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Mail className="h-5 w-5 text-gray-400" />
-                  </div>
-                  <input
-                    id="email"
-                    name="email"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    inputMode="email"
-                    autoComplete="email"
-                    autoCapitalize="none"
-                    autoCorrect="off"
-                    className="block w-full pl-10 pr-3 py-3 text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all"
-                    placeholder="tu@email.com"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
-                  Contraseña
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Lock className="h-5 w-5 text-gray-400" />
-                  </div>
-                  <input
-                    id="password"
-                    name="password"
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    autoComplete="current-password"
-                    className="block w-full pl-10 pr-3 py-3 text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all"
-                    placeholder="••••••••"
-                    required
-                  />
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full bg-gradient-to-r from-teal-500 to-cyan-600 text-white py-3 px-4 rounded-lg font-semibold hover:from-teal-600 hover:to-cyan-700 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
-              >
-                {loading ? (
-                  <div className="flex items-center">
-                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                    Iniciando sesión...
-                  </div>
-                ) : (
-                  <>
-                    <LogIn className="h-5 w-5 mr-2" />
-                    Iniciar Sesión
-                  </>
-                )}
-              </button>
-            </form>
-
-            <div className="mt-8 pt-6 border-t border-gray-200">
-              <p className="text-center text-sm text-gray-600">
-                ¿Olvidaste tu contraseña?{' '}
-                <a href="#" className="text-teal-600 hover:text-teal-700 font-medium">
-                  Recuperar contraseña
-                </a>
-              </p>
+          {error && <div className="partner-login-error" role="alert"><AlertCircle /><p>{error}</p></div>}
+          <form onSubmit={handleSubmit} className="partner-login-form" aria-busy={loading}>
+            <div>
+              <label htmlFor="email">Correo electrónico</label>
+              <div className="partner-login-input"><Mail aria-hidden="true" /><input id="email" name="email" type="email" value={email} onChange={e => setEmail(e.target.value)} inputMode="email" autoComplete="email" autoCapitalize="none" autoCorrect="off" placeholder="nombre@negocio.com" required /></div>
             </div>
-          </div>
+            <div>
+              <div className="partner-login-label-row"><label htmlFor="password">Contraseña</label><a href="#">¿La olvidaste?</a></div>
+              <div className="partner-login-input"><Lock aria-hidden="true" /><input id="password" name="password" type={showPassword ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} autoComplete="current-password" placeholder="••••••••" required /><button type="button" onClick={() => setShowPassword(value => !value)} aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}>{showPassword ? <EyeOff /> : <Eye />}</button></div>
+            </div>
+            <button type="submit" disabled={loading} className="partner-login-submit">{loading ? <><span className="partner-login-spinner" /> Iniciando sesión...</> : <>Iniciar sesión <LogIn /></>}</button>
+          </form>
+          <div className="partner-login-help"><p>¿Todavía no sos aliado?</p><a href="mailto:info@dogcatify.com">Quiero sumar mi negocio →</a></div>
         </div>
-
-        <div className="mt-8 text-center">
-          <button
-            onClick={() => navigate('/')}
-            className="text-gray-600 hover:text-gray-800 font-medium py-2"
-          >
-            ← Volver al inicio
-          </button>
-        </div>
-      </div>
-    </div>
+      </section>
+    </main>
   );
 };
 

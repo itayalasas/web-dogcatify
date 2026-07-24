@@ -153,6 +153,16 @@ export interface Partner {
   commission_percentage: number | null;
   mercadopago_connected: boolean | null;
   created_at: string | null;
+  rut?: string | null;
+  calle?: string | null;
+  numero?: string | null;
+  barrio?: string | null;
+  codigo_postal?: string | null;
+  iva_rate?: number | null;
+  iva_included_in_price?: boolean | null;
+  has_shipping?: boolean | null;
+  shipping_cost?: number | null;
+  free_shipping_threshold?: number | null;
 }
 
 export interface AdminSettings {
@@ -379,6 +389,18 @@ export const partnersService = {
     const { data, error } = await supabase
       .from('partners')
       .update({ commission_percentage: commissionPercentage })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data as Partner;
+  },
+
+  async updateProfile(id: string, profile: Partial<Partner>) {
+    const { data, error } = await supabase
+      .from('partners')
+      .update(profile)
       .eq('id', id)
       .select()
       .single();
