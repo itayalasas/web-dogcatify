@@ -17,7 +17,15 @@ interface Place {
   images: string[] | null;
 }
 
-const MyBusinesses = ({ partnerId: requestedPartnerId }: { partnerId?: string }) => {
+const MyBusinesses = ({
+  partnerId: requestedPartnerId,
+  accountPartnerIds = [],
+  maxServices = null,
+}: {
+  partnerId?: string;
+  accountPartnerIds?: string[];
+  maxServices?: number | null;
+}) => {
   const { profile } = useAuth();
   const [places, setPlaces] = useState<Place[]>([]);
   const [loading, setLoading] = useState(true);
@@ -119,6 +127,8 @@ const MyBusinesses = ({ partnerId: requestedPartnerId }: { partnerId?: string })
       <BusinessServices
         place={selectedPlace}
         partnerId={partnerId!}
+        accountPartnerIds={accountPartnerIds.length ? accountPartnerIds : [partnerId!]}
+        maxServices={maxServices}
         onBack={() => setSelectedPlace(null)}
       />
     );

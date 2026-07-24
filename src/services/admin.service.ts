@@ -5,8 +5,6 @@ const IVA_RATE = 22;
 function generatePartnerBreakdown(booking: Booking) {
   const servicePrice = booking.total_amount || 0;
   const ivaAmount = (servicePrice * IVA_RATE) / 100;
-  const commissionPercentage = booking.commission_percentage || 5;
-  const commissionAmount = (servicePrice * commissionPercentage) / 100;
 
   return {
     iva_rate: IVA_RATE,
@@ -32,15 +30,14 @@ function generatePartnerBreakdown(booking: Booking) {
     iva_included: false,
     shipping_cost: 0,
     total_partners: 1,
-    commission_split: commissionAmount,
+    commission_split: 0,
   };
 }
 
 async function createOrUpdateOrder(booking: Booking & { payment_preference_id?: string; notes?: string; payment_data?: any }) {
   const partnerBreakdown = generatePartnerBreakdown(booking);
-  const commissionPercentage = booking.commission_percentage || 5;
-  const commissionAmount = (booking.total_amount * commissionPercentage) / 100;
-  const partnerAmount = booking.total_amount - commissionAmount;
+  const commissionAmount = 0;
+  const partnerAmount = booking.total_amount;
 
   const { data: existingOrder } = await supabase
     .from('orders')
@@ -150,7 +147,7 @@ export interface Partner {
   is_verified: boolean | null;
   rating: number | null;
   reviews_count: number | null;
-  commission_percentage: number | null;
+  commission_percentage?: number | null;
   mercadopago_connected: boolean | null;
   created_at: string | null;
   rut?: string | null;
@@ -404,18 +401,6 @@ export const partnersService = {
     return data as Partner[];
   },
 
-  async updateCommission(id: string, commissionPercentage: number) {
-    const { data, error } = await supabase
-      .from('partners')
-      .update({ commission_percentage: commissionPercentage })
-      .eq('id', id)
-      .select()
-      .single();
-
-    if (error) throw error;
-    return data as Partner;
-  },
-
   async updateProfile(id: string, profile: Partial<Partner>) {
     const { data, error } = await supabase
       .from('partners')
@@ -598,21 +583,14 @@ export const bookingsService = {
     if (error) throw error;
 
     if (status === 'confirmed' && data) {
-      const { data: partnerData } = await supabase
-        .from('partners')
-        .select('commission_percentage')
-        .eq('id', data.partner_id)
-        .maybeSingle();
-
-      const bookingWithCommission = {
+      const bookingWithDirectPayment = {
         ...data,
-        commission_percentage: partnerData?.commission_percentage || 5,
         payment_preference_id: data.payment_preference_id,
         notes: data.notes,
         payment_data: data.payment_data,
       };
 
-      await createOrUpdateOrder(bookingWithCommission);
+      await createOrUpdateOrder(bookingWithDirectPayment);
 
       const reservationDate = new Date(data.date);
       const dateFormatted = reservationDate.toLocaleDateString('es-UY', {

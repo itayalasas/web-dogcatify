@@ -6,8 +6,6 @@ const IVA_RATE = 22;
 async function generatePartnerBreakdown(booking: Booking) {
   const servicePrice = booking.total_amount || 0;
   const ivaAmount = (servicePrice * IVA_RATE) / 100;
-  const commissionPercentage = booking.commission_percentage || 5;
-  const commissionAmount = (servicePrice * commissionPercentage) / 100;
 
   const { data: partnerFiscalData } = await supabase
     .from('partners')
@@ -43,15 +41,14 @@ async function generatePartnerBreakdown(booking: Booking) {
     iva_included: false,
     shipping_cost: 0,
     total_partners: 1,
-    commission_split: commissionAmount,
+    commission_split: 0,
   };
 }
 
 async function createOrUpdateOrder(booking: Booking & { payment_preference_id?: string; notes?: string; payment_data?: any }) {
   const partnerBreakdown = await generatePartnerBreakdown(booking);
-  const commissionPercentage = booking.commission_percentage || 5;
-  const commissionAmount = (booking.total_amount * commissionPercentage) / 100;
-  const partnerAmount = booking.total_amount - commissionAmount;
+  const commissionAmount = 0;
+  const partnerAmount = booking.total_amount;
   const ivaAmount = (booking.total_amount * IVA_RATE) / 100;
 
   const { data: existingOrder } = await supabase
@@ -162,21 +159,14 @@ export const partnerBookingsService = {
     if (error) throw error;
 
     if (status === 'confirmed' && data) {
-      const { data: partnerData } = await supabase
-        .from('partners')
-        .select('commission_percentage')
-        .eq('id', data.partner_id)
-        .maybeSingle();
-
-      const bookingWithCommission = {
+      const bookingWithDirectPayment = {
         ...data,
-        commission_percentage: partnerData?.commission_percentage || 5,
         payment_preference_id: data.payment_preference_id,
         notes: data.notes,
         payment_data: data.payment_data,
       };
 
-      await createOrUpdateOrder(bookingWithCommission);
+      await createOrUpdateOrder(bookingWithDirectPayment);
 
       const reservationDate = new Date(data.date);
       const dateFormatted = reservationDate.toLocaleDateString('es-UY', {

@@ -186,7 +186,7 @@ const OverviewDashboard = () => {
       textColor: 'text-violet-600',
     },
     {
-      title: 'Ingresos del Mes',
+      title: 'Volumen Vendido del Mes',
       value: formatCurrency(stats.monthlyRevenue),
       growth: stats.revenueGrowth,
       icon: DollarSign,
@@ -267,8 +267,8 @@ const OverviewDashboard = () => {
         <div className="lg:col-span-2 bg-white rounded-xl shadow-sm p-6 border border-gray-100">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h3 className="text-lg font-semibold text-gray-800">Ingresos (Últimos 30 días)</h3>
-              <p className="text-sm text-gray-500 mt-1">Evolución de ingresos por pedidos pagados</p>
+              <h3 className="text-lg font-semibold text-gray-800">Volumen vendido (Últimos 30 días)</h3>
+              <p className="text-sm text-gray-500 mt-1">Evolución de ventas cobradas por los aliados</p>
             </div>
             <div className="flex items-center gap-2 text-teal-600">
               <Activity className="h-5 w-5" />

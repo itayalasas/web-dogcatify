@@ -10,7 +10,8 @@ import ProtectedRoute from './components/ProtectedRoute';
 import PaymentSuccess from './components/PaymentSuccess';
 import PaymentFailure from './components/PaymentFailure';
 import PaymentPending from './components/PaymentPending';
-//test
+import SubscriptionReturn from './components/SubscriptionReturn';
+
 function App() {
   return (
     <Router>
@@ -23,6 +24,7 @@ function App() {
           <Route path="/pago-exitoso" element={<PaymentSuccess />} />
           <Route path="/pago-fallido" element={<PaymentFailure />} />
           <Route path="/pago-pendiente" element={<PaymentPending />} />
+          <Route path="/subscription/return" element={<SubscriptionReturn />} />
           <Route
             path="/dashboard"
             element={

@@ -19,6 +19,7 @@ import {
   PawPrint,
   Megaphone,
   MessageCircle,
+  CreditCard,
 } from 'lucide-react';
 import PromotionsManager from './admin/PromotionsManager';
 import PlacesManager from './admin/PlacesManager';
@@ -35,6 +36,7 @@ import NotificationsManager from './admin/NotificationsManager';
 import SecurityManager from './admin/SecurityManager';
 import OverviewDashboard from './admin/OverviewDashboard';
 import ChatbotManager from './admin/ChatbotManager';
+import SubscriptionPlansManager from './admin/SubscriptionPlansManager';
 
 const AdminDashboard = () => {
   const { user, signOut } = useAuth();
@@ -63,6 +65,7 @@ const AdminDashboard = () => {
     { id: 'promotions', label: 'Promociones', icon: Megaphone },
     { id: 'places', label: 'Lugares Pet-Friendly', icon: MapPin },
     { id: 'partners', label: 'Aliados', icon: Store },
+    { id: 'subscriptions', label: 'Suscripciones', icon: CreditCard },
     { id: 'users', label: 'Usuarios', icon: Users },
     { id: 'pets', label: 'Mascotas', icon: PawPrint },
     { id: 'products', label: 'Productos', icon: Package },
@@ -91,6 +94,9 @@ const AdminDashboard = () => {
 
       case 'partners':
         return <PartnersManager />;
+
+      case 'subscriptions':
+        return <SubscriptionPlansManager />;
 
       case 'users':
         return <UsersManager />;

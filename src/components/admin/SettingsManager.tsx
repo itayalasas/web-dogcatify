@@ -3,7 +3,6 @@ import { settingsService } from '../../services/admin.service';
 import { Save, DollarSign, Percent, CreditCard } from 'lucide-react';
 
 interface SettingsState {
-  default_commission: string;
   mercadopago_public_key: string;
   mercadopago_access_token: string;
   min_order_amount: string;
@@ -15,7 +14,6 @@ const SettingsManager = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [settings, setSettings] = useState<SettingsState>({
-    default_commission: '15',
     mercadopago_public_key: '',
     mercadopago_access_token: '',
     min_order_amount: '0',
@@ -33,7 +31,6 @@ const SettingsManager = () => {
       const allSettings = await settingsService.getAll();
 
       const newSettings: SettingsState = {
-        default_commission: '15',
         mercadopago_public_key: '',
         mercadopago_access_token: '',
         min_order_amount: '0',
@@ -60,7 +57,6 @@ const SettingsManager = () => {
       setSaving(true);
 
       await Promise.all([
-        settingsService.set('default_commission', parseFloat(settings.default_commission) || 15),
         settingsService.set('mercadopago_public_key', settings.mercadopago_public_key),
         settingsService.set('mercadopago_access_token', settings.mercadopago_access_token),
         settingsService.set('min_order_amount', parseFloat(settings.min_order_amount) || 0),
@@ -94,29 +90,10 @@ const SettingsManager = () => {
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <div className="flex items-center mb-4">
             <Percent className="h-6 w-6 text-teal-600 mr-2" />
-            <h4 className="text-lg font-semibold text-gray-800">Comisiones y Pagos</h4>
+            <h4 className="text-lg font-semibold text-gray-800">Operación e Impuestos</h4>
           </div>
 
           <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Comisión por Defecto (%)
-              </label>
-              <input
-                type="number"
-                min="0"
-                max="100"
-                step="0.1"
-                value={settings.default_commission}
-                onChange={(e) => setSettings({ ...settings, default_commission: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-                placeholder="15"
-              />
-              <p className="mt-1 text-xs text-gray-500">
-                Comisión aplicada por defecto a nuevos partners
-              </p>
-            </div>
-
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 IVA / Impuesto (%)
@@ -177,7 +154,9 @@ const SettingsManager = () => {
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <div className="flex items-center mb-4">
             <CreditCard className="h-6 w-6 text-teal-600 mr-2" />
-            <h4 className="text-lg font-semibold text-gray-800">Integración MercadoPago</h4>
+            <h4 className="text-lg font-semibold text-gray-800">
+              Mercado Pago para Suscripciones
+            </h4>
           </div>
 
           <div className="space-y-4">
@@ -193,7 +172,7 @@ const SettingsManager = () => {
                 placeholder="APP_USR-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
               />
               <p className="mt-1 text-xs text-gray-500">
-                Clave pública de MercadoPago para procesar pagos
+                Clave pública de la cuenta DogCatiFy usada para cobrar suscripciones
               </p>
             </div>
 
@@ -209,7 +188,7 @@ const SettingsManager = () => {
                 placeholder="APP_USR-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
               />
               <p className="mt-1 text-xs text-gray-500">
-                Token de acceso de MercadoPago para operaciones del servidor
+                Token de DogCatiFy para crear y sincronizar planes de suscripción
               </p>
             </div>
 
@@ -217,7 +196,8 @@ const SettingsManager = () => {
               <h5 className="text-sm font-semibold text-blue-800 mb-2">Información Importante</h5>
               <ul className="text-xs text-blue-700 space-y-1 list-disc list-inside">
                 <li>Las credenciales de MercadoPago son sensibles y se almacenan de forma segura</li>
-                <li>Usa las credenciales de producción para pagos reales</li>
+                <li>Estas credenciales corresponden a DogCatiFy y sus suscripciones</li>
+                <li>Las ventas de productos y reservas usan la cuenta Mercado Pago de cada aliado</li>
                 <li>Las credenciales de prueba solo funcionan en modo sandbox</li>
                 <li>Puedes obtener tus credenciales en el panel de desarrolladores de MercadoPago</li>
               </ul>
@@ -231,11 +211,7 @@ const SettingsManager = () => {
             <h4 className="text-lg font-semibold text-gray-800">Resumen de Configuración</h4>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="bg-gray-50 p-4 rounded-lg">
-              <p className="text-xs text-gray-600 mb-1">Comisión Default</p>
-              <p className="text-2xl font-bold text-gray-800">{settings.default_commission}%</p>
-            </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="bg-gray-50 p-4 rounded-lg">
               <p className="text-xs text-gray-600 mb-1">IVA / Impuesto</p>
               <p className="text-2xl font-bold text-gray-800">{settings.tax_rate}%</p>

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   BarChart3,
   Briefcase,
@@ -14,6 +14,7 @@ import {
   MessageSquare,
   Package,
   PawPrint,
+  ShieldCheck,
   Settings,
   ShoppingBag,
   Star,
@@ -24,6 +25,20 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import type { Partner } from '../services/admin.service';
+import {
+  subscriptionService,
+  type SubscriptionPlan,
+} from '../services/subscription.service';
+import {
+  canAccessPartnerModule,
+  getPartnerLockedActionLabel,
+  getPartnerPlan,
+  getPartnerSubscriptionStatusLabel,
+  normalizePartnerPlanTier,
+  resolvePartnerAccountSubscription,
+  type PartnerModule,
+} from '../utils/partnerPlans';
+import { resolvePartnerPlanLimits } from '../utils/subscriptionPlanLimits';
 import MyBookings from './partner/MyBookings';
 import MyBusinesses from './partner/MyBusinesses';
 import MyReviews from './partner/MyReviews';
@@ -38,6 +53,7 @@ import {
   PartnerSchedule,
   PartnerSettings,
 } from './partner/PartnerPortalModules';
+import PartnerSubscriptionManager from './partner/PartnerSubscriptionManager';
 import './partner-dashboard.css';
 
 type Section =
@@ -52,6 +68,7 @@ type Section =
   | 'schedule'
   | 'earnings'
   | 'messages'
+  | 'subscription'
   | 'settings';
 
 const menuItems = [
@@ -61,13 +78,14 @@ const menuItems = [
   { id: 'new-appointment', label: 'Agendar cita', icon: CalendarPlus },
   { id: 'products', label: 'Productos', icon: Package },
   { id: 'orders', label: 'Pedidos', icon: ShoppingBag },
-  { id: 'clients', label: 'Clientes', icon: Users },
+  { id: 'clients', label: 'Clientes', icon: Users, module: 'clients' },
   { id: 'reviews', label: 'Reseñas', icon: Star },
   { id: 'schedule', label: 'Horarios', icon: Clock3 },
-  { id: 'earnings', label: 'Ganancias', icon: DollarSign },
+  { id: 'earnings', label: 'Analítica de ventas', icon: DollarSign, module: 'insights' },
   { id: 'messages', label: 'Mensajes', icon: MessageSquare },
+  { id: 'subscription', label: 'Plan y suscripción', icon: ShieldCheck },
   { id: 'settings', label: 'Perfil y configuración', icon: Settings },
-] satisfies { id: Section; label: string; icon: typeof Store }[];
+] satisfies { id: Section; label: string; icon: typeof Store; module?: PartnerModule }[];
 
 const businessTypeLabel: Record<string, string> = {
   veterinary: 'Veterinaria',
@@ -82,8 +100,15 @@ const businessTypeLabel: Record<string, string> = {
 export default function PartnerDashboard() {
   const { user, profile, signOut } = useAuth();
   const navigate = useNavigate();
-  const [activeSection, setActiveSection] = useState<Section>('overview');
+  const [searchParams] = useSearchParams();
+  const requestedSection = searchParams.get('section') as Section | null;
+  const [activeSection, setActiveSection] = useState<Section>(
+    requestedSection && ['overview', 'subscription', 'settings'].includes(requestedSection)
+      ? requestedSection
+      : 'overview',
+  );
   const [partners, setPartners] = useState<Partner[]>([]);
+  const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
   const [selectedPartnerId, setSelectedPartnerId] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -99,20 +124,24 @@ export default function PartnerDashboard() {
     setLoading(true);
     setError('');
 
-    const { data, error: queryError } = await supabase
-      .from('partners')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: true });
+    const [partnerResult, planResult] = await Promise.all([
+      supabase
+        .from('partners')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: true }),
+      subscriptionService.getPartnerPlans().catch(() => []),
+    ]);
 
-    if (queryError) {
+    if (partnerResult.error) {
       setError('No pudimos cargar los negocios asociados a esta cuenta.');
       setLoading(false);
       return;
     }
 
-    const nextPartners = (data || []) as Partner[];
+    const nextPartners = (partnerResult.data || []) as Partner[];
     setPartners(nextPartners);
+    setPlans(planResult);
     const currentStillExists = nextPartners.some((partner) => partner.id === preferredPartnerId);
     setSelectedPartnerId(currentStillExists ? preferredPartnerId! : nextPartners[0]?.id || '');
     setLoading(false);
@@ -143,7 +172,50 @@ export default function PartnerDashboard() {
     navigate('/');
   };
 
+  const verifiedPartners = partners.filter((partner) => partner.is_verified);
+  const accountSubscription = resolvePartnerAccountSubscription(
+    verifiedPartners.length ? verifiedPartners : partners,
+  );
+  const effectiveTier = accountSubscription?.subscriptionPlanTier || 'starter';
+  const effectivePlan = getPartnerPlan(effectiveTier);
+  const planRow =
+    plans.find((plan) => normalizePartnerPlanTier(plan.tier || plan.name) === effectiveTier) ||
+    null;
+  const planLimits = resolvePartnerPlanLimits(planRow || { tier: effectiveTier, audience_target: 'partners' });
+
+  const canOpenSection = (section: Section) => {
+    const item = menuItems.find((menuItem) => menuItem.id === section);
+    if (!item) return false;
+    if (
+      selectedPartner &&
+      !selectedPartner.is_verified &&
+      !['overview', 'subscription', 'settings'].includes(section)
+    ) {
+      return false;
+    }
+    if (!item.module) return true;
+    return canAccessPartnerModule(
+      effectiveTier,
+      item.module,
+      selectedPartner?.business_type,
+      accountSubscription?.subscriptionPlanStatus,
+      accountSubscription?.subscriptionPlanExpiresAt,
+    );
+  };
+
   const selectSection = (section: Section) => {
+    if (!canOpenSection(section)) {
+      const item = menuItems.find((menuItem) => menuItem.id === section);
+      setError(
+        selectedPartner && !selectedPartner.is_verified
+          ? 'Este módulo estará disponible cuando DogCatiFy verifique el negocio.'
+          : item?.module
+            ? `${getPartnerLockedActionLabel(item.module)}. Actualiza la suscripción para ingresar.`
+            : 'Este módulo no está disponible.',
+      );
+      return;
+    }
+    setError('');
     setActiveSection(section);
     setMobileMenuOpen(false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -213,14 +285,16 @@ export default function PartnerDashboard() {
         <nav aria-label="Navegación del portal">
           {menuItems.map((item) => {
             const Icon = item.icon;
+            const allowed = canOpenSection(item.id);
             return (
               <button
                 key={item.id}
-                className={activeSection === item.id ? 'active' : ''}
+                className={`${activeSection === item.id ? 'active' : ''} ${allowed ? '' : 'locked'}`}
                 onClick={() => selectSection(item.id)}
               >
                 <Icon />
                 <span>{item.label}</span>
+                {!allowed && <small>{item.module ? getPartnerLockedActionLabel(item.module) : 'Pendiente'}</small>}
               </button>
             );
           })}
@@ -246,7 +320,15 @@ export default function PartnerDashboard() {
           </div>
           <div className="partner-status">
             <span className={selectedPartner.is_active ? 'active' : ''} />
-            {selectedPartner.is_active ? 'Negocio activo' : 'Negocio inactivo'}
+            <div>
+              <strong>Plan {effectivePlan.name}</strong>
+              <small>
+                {getPartnerSubscriptionStatusLabel(
+                  accountSubscription?.subscriptionPlanStatus,
+                  accountSubscription?.subscriptionPlanExpiresAt,
+                )}
+              </small>
+            </div>
           </div>
         </header>
 
@@ -256,7 +338,13 @@ export default function PartnerDashboard() {
           {activeSection === 'overview' && (
             <PartnerOverview partner={selectedPartner} onNavigate={selectSection} />
           )}
-          {activeSection === 'businesses' && <MyBusinesses partnerId={selectedPartner.id} />}
+          {activeSection === 'businesses' && (
+            <MyBusinesses
+              partnerId={selectedPartner.id}
+              accountPartnerIds={partners.map((partner) => partner.id)}
+              maxServices={planLimits.maxServices}
+            />
+          )}
           {activeSection === 'appointments' && <MyBookings partnerId={selectedPartner.id} />}
           {activeSection === 'new-appointment' && (
             <ManualBooking
@@ -265,15 +353,32 @@ export default function PartnerDashboard() {
               onBookingCreated={() => setActiveSection('appointments')}
             />
           )}
-          {activeSection === 'products' && <PartnerProducts partner={selectedPartner} />}
+          {activeSection === 'products' && (
+            <PartnerProducts
+              partner={selectedPartner}
+              accountPartnerIds={partners.map((partner) => partner.id)}
+              maxProducts={planLimits.maxProducts}
+            />
+          )}
           {activeSection === 'orders' && <PartnerOrders partnerId={selectedPartner.id} />}
           {activeSection === 'clients' && <PartnerClients partnerId={selectedPartner.id} />}
           {activeSection === 'reviews' && <MyReviews partnerId={selectedPartner.id} />}
           {activeSection === 'schedule' && <PartnerSchedule partner={selectedPartner} />}
           {activeSection === 'earnings' && <PartnerEarnings partnerId={selectedPartner.id} />}
           {activeSection === 'messages' && user && <PartnerMessages partner={selectedPartner} userId={user.id} />}
+          {activeSection === 'subscription' && (
+            <PartnerSubscriptionManager
+              partners={partners}
+              onChanged={() => loadPartners(selectedPartner.id)}
+            />
+          )}
           {activeSection === 'settings' && (
-            <PartnerSettings partner={selectedPartner} onSaved={() => loadPartners(selectedPartner.id)} />
+            <PartnerSettings
+              partner={selectedPartner}
+              accountSubscription={accountSubscription}
+              onSubscription={() => selectSection('subscription')}
+              onSaved={() => loadPartners(selectedPartner.id)}
+            />
           )}
         </div>
 

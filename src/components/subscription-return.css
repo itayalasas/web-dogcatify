@@ -1,0 +1,61 @@
+.subscription-return-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background:
+    radial-gradient(circle at 20% 15%, rgba(75, 153, 145, .2), transparent 35%),
+    linear-gradient(145deg, #f7fbf9 0%, #fffaf1 100%);
+}
+
+.subscription-return-page section {
+  width: min(560px, 100%);
+  padding: 48px;
+  border: 1px solid rgba(45, 106, 111, .16);
+  border-radius: 32px;
+  background: rgba(255, 255, 255, .92);
+  box-shadow: 0 24px 70px rgba(24, 52, 50, .14);
+  text-align: center;
+}
+
+.subscription-return-page section > svg {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 20px;
+  color: #2d6a6f;
+}
+
+.subscription-return-page section.failed > svg { color: #b42318; }
+.subscription-return-page section.pending > svg { color: #b7791f; }
+
+.subscription-return-page p {
+  color: #4b9991;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+}
+
+.subscription-return-page h1 {
+  margin: 10px 0 14px;
+  color: #183432;
+  font-size: clamp(28px, 5vw, 42px);
+  line-height: 1.08;
+}
+
+.subscription-return-page span {
+  display: block;
+  color: #58716d;
+  line-height: 1.7;
+}
+
+.subscription-return-page button {
+  margin-top: 28px;
+  padding: 14px 22px;
+  border: 0;
+  border-radius: 14px;
+  background: #2d6a6f;
+  color: white;
+  font-weight: 800;
+  cursor: pointer;
+}

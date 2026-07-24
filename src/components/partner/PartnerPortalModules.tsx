@@ -4,6 +4,11 @@ import { CalendarDays, CheckCircle, Clock, DollarSign, Edit3, Mail, MapPin, Mess
 import { supabase } from '../../lib/supabase';
 import type { Partner, PartnerProduct } from '../../services/admin.service';
 import { partnerOrdersService, partnerProductsService } from '../../services/partner.service';
+import {
+  getPartnerPlan,
+  getPartnerSubscriptionStatusLabel,
+  type PartnerAccountSubscriptionSummary,
+} from '../../utils/partnerPlans';
 import PartnerProfileModal from '../admin/PartnerProfileModal';
 
 const money = (value: number) => new Intl.NumberFormat('es-UY', { style: 'currency', currency: 'UYU', maximumFractionDigits: 0 }).format(value || 0);
@@ -95,10 +100,7 @@ export function PartnerOverview({ partner, onNavigate }: { partner: Partner; onN
   const rating = reviews.length
     ? reviews.reduce((sum, item) => sum + Number(item.rating || 0), 0) / reviews.length
     : 0;
-  const netIncome = paidOrders.reduce(
-    (sum, item) => sum + Number(item.partner_amount ?? (Number(item.total_amount || 0) - Number(item.commission_amount || 0))),
-    0,
-  );
+  const netIncome = paidOrders.reduce((sum, item) => sum + Number(item.total_amount || 0), 0);
   const pendingBookings = periodBookings.filter((item) => ['pending', 'confirmed'].includes(item.status)).length;
   const activeCatalog = products.filter((item) => item.is_active).length + services.filter((item) => item.is_active).length;
   const recentActivity = [
@@ -144,7 +146,7 @@ export function PartnerOverview({ partner, onNavigate }: { partner: Partner; onN
       {error && <div className="portal-error">{error}</div>}
       <div className="portal-stat-grid portal-stat-grid-overview">
         <Stat label="Citas activas" value={String(pendingBookings)} icon={<CalendarDays />} />
-        <Stat label="Ingreso neto" value={money(netIncome)} icon={<DollarSign />} />
+        <Stat label="Ventas cobradas" value={money(netIncome)} icon={<DollarSign />} />
         <Stat label="Clientes" value={String(customerKeys.size)} icon={<Users />} />
         <Stat label="Catálogo activo" value={String(activeCatalog)} icon={<Package />} />
         <Stat label="Calificación" value={rating ? `${rating.toFixed(1)} / 5` : 'Sin reseñas'} icon={<Star />} />
@@ -171,26 +173,55 @@ export function PartnerOverview({ partner, onNavigate }: { partner: Partner; onN
           <button onClick={() => onNavigate('appointments')}><CalendarDays /><span><strong>Revisar agenda</strong><small>Confirmá y gestioná próximas citas</small></span></button>
           <button onClick={() => onNavigate('businesses')}><Store /><span><strong>Negocios y servicios</strong><small>Actualizá tu oferta comercial</small></span></button>
           <button onClick={() => onNavigate('clients')}><UserRound /><span><strong>Ver clientes</strong><small>Consultá el historial de interacciones</small></span></button>
-          <button onClick={() => onNavigate('earnings')}><DollarSign /><span><strong>Revisar ganancias</strong><small>Ventas, comisiones e ingreso neto</small></span></button>
+          <button onClick={() => onNavigate('earnings')}><DollarSign /><span><strong>Analizar ventas</strong><small>Volumen cobrado directamente por tu negocio</small></span></button>
         </section>
       </div>
     </Module>
   );
 }
 
-export function PartnerProducts({ partner }: { partner: Partner }) {
+export function PartnerProducts({
+  partner,
+  accountPartnerIds,
+  maxProducts,
+}: {
+  partner: Partner;
+  accountPartnerIds: string[];
+  maxProducts: number | null;
+}) {
   const partnerId = partner.id;
   const [products, setProducts] = useState<PartnerProduct[]>([]);
+  const [accountProductCount, setAccountProductCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<PartnerProduct | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const emptyProduct = { name: '', description: '', category: '', price: '', iva_rate: String(partner.iva_rate ?? 0), stock: '', brand: '', weight: '', size: '', color: '', age_range: '', pet_type: '', images: '', currency: 'UYU' };
   const [form, setForm] = useState(emptyProduct);
-  const load = async () => { setLoading(true); try { setProducts(await partnerProductsService.getMyProducts(partnerId)); } finally { setLoading(false); } };
+  const load = async () => {
+    setLoading(true);
+    try {
+      const [productRows, countResult] = await Promise.all([
+        partnerProductsService.getMyProducts(partnerId),
+        supabase
+          .from('partner_products')
+          .select('id', { count: 'exact', head: true })
+          .in('partner_id', accountPartnerIds.length ? accountPartnerIds : [partnerId]),
+      ]);
+      if (countResult.error) throw countResult.error;
+      setProducts(productRows);
+      setAccountProductCount(countResult.count || 0);
+    } finally {
+      setLoading(false);
+    }
+  };
   useEffect(() => { load(); }, [partnerId]);
   const toggle = async (product: PartnerProduct) => { await partnerProductsService.toggleActive(product.id, !product.is_active); load(); };
   const openForm = (product?: PartnerProduct) => {
+    if (!product && maxProducts !== null && accountProductCount >= maxProducts) {
+      alert(`Tu plan permite hasta ${maxProducts} productos en toda la cuenta. Actualiza la suscripción para agregar otro.`);
+      return;
+    }
     setEditing(product || null);
     setForm(product ? {
       name: product.name,
@@ -249,7 +280,7 @@ export function PartnerProducts({ partner }: { partner: Partner }) {
   };
   if (loading) return <Loading label="Cargando productos" />;
   return <Module title="Productos" description="Catálogo publicado en DogCatiFy.">
-    <div className="portal-toolbar"><div><strong>{products.length}</strong><span> productos registrados</span></div><button className="portal-primary" onClick={() => openForm()}><Plus /> Nuevo producto</button></div>
+    <div className="portal-toolbar"><div><strong>{products.length}</strong><span> productos en este negocio · {accountProductCount} / {maxProducts === null ? 'sin límite' : maxProducts} en la cuenta</span></div><button className="portal-primary" disabled={maxProducts !== null && accountProductCount >= maxProducts} onClick={() => openForm()}><Plus /> Nuevo producto</button></div>
     {showForm && <form className="portal-editor" onSubmit={save}>
       <div className="portal-editor-heading"><div><p>Catálogo de la app</p><h3>{editing ? 'Editar producto' : 'Nuevo producto'}</h3></div><button type="button" onClick={() => setShowForm(false)}>Cerrar</button></div>
       <div className="portal-form-row"><Field label="Nombre *"><input required value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></Field><Field label="Categoría"><select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}><option value="">Seleccionar</option><option>Comida</option><option>Juguetes</option><option>Accesorios</option><option>Higiene</option><option>Salud</option><option>Ropa</option><option>Otros</option></select></Field></div>
@@ -280,7 +311,7 @@ export function PartnerOrders({ partnerId }: { partnerId: string }) {
     else load();
   };
   if (loading) return <Loading label="Cargando pedidos" />;
-  return <Module title="Pedidos" description="Ventas y reservas convertidas en órdenes."><SearchBox value={filter} onChange={setFilter} placeholder="Buscar pedido o cliente" /><div className="portal-table-wrap"><table className="portal-table"><thead><tr><th>Pedido</th><th>Cliente</th><th>Fecha</th><th>Total</th><th>Tu ingreso</th><th>Pago</th><th>Estado</th><th>Actualizar</th></tr></thead><tbody>{visible.map(order => <tr key={order.id}><td><strong>{order.order_number || `#${String(order.id).slice(0, 8)}`}</strong><small>{order.order_type === 'service_booking' ? 'Reserva de servicio' : 'Compra de producto'}</small></td><td>{order.customer_name || order.customer_email || 'Cliente'}</td><td>{date(order.created_at)}</td><td>{money(order.total_amount)}</td><td>{money(order.partner_amount ?? (Number(order.total_amount || 0) - Number(order.commission_amount || 0)))}</td><td>{badge(order.payment_status)}</td><td>{badge(order.status)}</td><td><select className="portal-status-select" value={order.status || 'pending'} onChange={(event) => updateStatus(order.id, event.target.value)}><option value="pending">Pendiente</option><option value="confirmed">Confirmado</option><option value="processing">En proceso</option><option value="preparing">Preparando</option><option value="ready_for_delivery">Listo</option><option value="shipped">Enviado</option><option value="delivered">Entregado</option><option value="completed">Completado</option><option value="cancelled">Cancelado</option></select></td></tr>)}</tbody></table></div><Empty show={!visible.length} icon={<Store />} title="No hay pedidos" text="Los pedidos de la app aparecerán en este módulo." /></Module>;
+  return <Module title="Pedidos" description="Ventas y reservas convertidas en órdenes."><SearchBox value={filter} onChange={setFilter} placeholder="Buscar pedido o cliente" /><div className="portal-table-wrap"><table className="portal-table"><thead><tr><th>Pedido</th><th>Cliente</th><th>Fecha</th><th>Total</th><th>Cobro del aliado</th><th>Pago</th><th>Estado</th><th>Actualizar</th></tr></thead><tbody>{visible.map(order => <tr key={order.id}><td><strong>{order.order_number || `#${String(order.id).slice(0, 8)}`}</strong><small>{order.order_type === 'service_booking' ? 'Reserva de servicio' : 'Compra de producto'}</small></td><td>{order.customer_name || order.customer_email || 'Cliente'}</td><td>{date(order.created_at)}</td><td>{money(order.total_amount)}</td><td>{money(order.total_amount)}<small>Pago directo</small></td><td>{badge(order.payment_status)}</td><td>{badge(order.status)}</td><td><select className="portal-status-select" value={order.status || 'pending'} onChange={(event) => updateStatus(order.id, event.target.value)}><option value="pending">Pendiente</option><option value="confirmed">Confirmado</option><option value="processing">En proceso</option><option value="preparing">Preparando</option><option value="ready_for_delivery">Listo</option><option value="shipped">Enviado</option><option value="delivered">Entregado</option><option value="completed">Completado</option><option value="cancelled">Cancelado</option></select></td></tr>)}</tbody></table></div><Empty show={!visible.length} icon={<Store />} title="No hay pedidos" text="Los pedidos de la app aparecerán en este módulo." /></Module>;
 }
 
 export function PartnerClients({ partnerId }: { partnerId: string }) {
@@ -315,10 +346,10 @@ export function PartnerSchedule({ partner }: { partner: Partner }) {
 export function PartnerEarnings({ partnerId }: { partnerId: string }) {
   const [orders, setOrders] = useState<any[]>([]); const [loading, setLoading] = useState(true);
   useEffect(() => { partnerOrdersService.getMyOrders(partnerId).then(setOrders).finally(()=>setLoading(false)); }, [partnerId]);
-  const paid = orders.filter(item => item.payment_status === 'paid' || ['delivered', 'completed'].includes(item.status)); const gross = paid.reduce((sum,item)=>sum+Number(item.total_amount||0),0); const commissions=paid.reduce((sum,item)=>sum+Number(item.commission_amount||0),0); const net=paid.reduce((sum,item)=>sum+Number(item.partner_amount ?? (Number(item.total_amount || 0) - Number(item.commission_amount || 0))),0);
-  const byMonth = useMemo(() => { const map = new Map<string,number>(); paid.forEach(item => { const key = new Date(item.created_at).toLocaleDateString('es-UY',{month:'long',year:'numeric'}); map.set(key,(map.get(key)||0)+Number(item.partner_amount ?? (Number(item.total_amount || 0) - Number(item.commission_amount || 0)))); }); return [...map.entries()]; }, [orders]);
+  const paid = orders.filter(item => item.payment_status === 'paid' || ['delivered', 'completed'].includes(item.status)); const gross = paid.reduce((sum,item)=>sum+Number(item.total_amount||0),0); const average = paid.length ? gross / paid.length : 0;
+  const byMonth = useMemo(() => { const map = new Map<string,number>(); paid.forEach(item => { const key = new Date(item.created_at).toLocaleDateString('es-UY',{month:'long',year:'numeric'}); map.set(key,(map.get(key)||0)+Number(item.total_amount || 0)); }); return [...map.entries()]; }, [orders]);
   if (loading) return <Loading label="Calculando ganancias" />;
-  return <Module title="Ganancias" description="Resumen calculado desde órdenes pagadas o completadas."><div className="portal-stat-grid"><Stat label="Ventas brutas" value={money(gross)} icon={<DollarSign/>}/><Stat label="Comisiones" value={money(commissions)} icon={<CheckCircle/>}/><Stat label="Ingreso neto" value={money(net)} icon={<Store/>}/><Stat label="Operaciones" value={String(paid.length)} icon={<Package/>}/></div><div className="portal-panel"><h3>Ingresos por mes</h3>{byMonth.map(([month,total])=><div className="portal-money-row" key={month}><span>{month}</span><strong>{money(total)}</strong></div>)}<Empty show={!byMonth.length} icon={<DollarSign/>} title="Todavía no hay ingresos liquidados" text="Aquí se mostrarán las órdenes pagadas y completadas."/></div></Module>;
+  return <Module title="Analítica de ventas" description="Las ventas se cobran directamente en la cuenta Mercado Pago del aliado."><div className="portal-direct-payment-note"><CheckCircle/><div><strong>Modelo sin comisión</strong><span>DogCatiFy no descuenta un porcentaje de estas operaciones; monetiza mediante la suscripción de tu cuenta.</span></div></div><div className="portal-stat-grid"><Stat label="Volumen cobrado" value={money(gross)} icon={<DollarSign/>}/><Stat label="Recibido por el aliado" value={money(gross)} icon={<Store/>}/><Stat label="Ticket promedio" value={money(average)} icon={<ShoppingBag/>}/><Stat label="Operaciones" value={String(paid.length)} icon={<Package/>}/></div><div className="portal-panel"><h3>Ventas por mes</h3>{byMonth.map(([month,total])=><div className="portal-money-row" key={month}><span>{month}</span><strong>{money(total)}</strong></div>)}<Empty show={!byMonth.length} icon={<DollarSign/>} title="Todavía no hay ventas cobradas" text="Aquí se mostrarán las órdenes pagadas y completadas."/></div></Module>;
 }
 
 export function PartnerMessages({ partner, userId }: { partner: Partner; userId: string }) {
@@ -331,9 +362,21 @@ export function PartnerMessages({ partner, userId }: { partner: Partner; userId:
   return <Module title="Mensajes" description="Conversaciones iniciadas desde adopciones y perfiles de aliados."><div className="portal-chat"><aside>{conversations.map(conv=><button className={selected?.id===conv.id?'active':''} onClick={()=>open(conv)} key={conv.id}><span><UserRound/></span><div><strong>{conv.customer?.display_name||'Usuario DogCatiFy'}</strong><p>{conv.latest?.message||'Conversación iniciada'}</p></div>{conv.latest&&!conv.latest.is_read&&conv.latest.sender_id!==userId&&<i/>}</button>)}<Empty show={!conversations.length} icon={<MessageSquare/>} title="Sin conversaciones" text="Los mensajes de la app aparecerán aquí."/></aside><section>{selected?<><header><strong>{selected.customer?.display_name||'Usuario DogCatiFy'}</strong><small>Conversación de DogCatiFy</small></header><div className="portal-messages">{messages.map(message=><div key={message.id} className={message.sender_id===userId?'mine':''}><p>{message.message}</p><small>{new Date(message.created_at).toLocaleString('es-UY')}</small></div>)}</div><form onSubmit={send}><input value={text} onChange={e=>setText(e.target.value)} placeholder="Escribí un mensaje…"/><button>Enviar</button></form></>:<div className="portal-chat-empty"><Mail/><h3>Seleccioná una conversación</h3><p>Podés responder sin salir del portal.</p></div>}</section></div></Module>;
 }
 
-export function PartnerSettings({ partner, onSaved }: { partner: Partner; onSaved: () => void }) {
+export function PartnerSettings({
+  partner,
+  accountSubscription,
+  onSubscription,
+  onSaved,
+}: {
+  partner: Partner;
+  accountSubscription: PartnerAccountSubscriptionSummary | null;
+  onSubscription: () => void;
+  onSaved: () => void;
+}) {
   const [editing,setEditing]=useState(false);
-  return <Module title="Perfil y configuración" description="Información pública, fiscal y operativa de tu negocio.">{editing&&<PartnerProfileModal partner={partner} onClose={()=>setEditing(false)} onSaved={()=>{setEditing(false);onSaved();}}/>}<div className="portal-profile"><div className="portal-profile-brand">{partner.logo?<img src={partner.logo} alt={`Logo de ${partner.business_name}`}/>:<Store/>}<div><p>{partner.business_type}</p><h3>{partner.business_name}</h3><span>{partner.is_verified?'Negocio verificado':'Verificación pendiente'} · {partner.approval_status || 'pending'}</span></div><button className="portal-primary" onClick={()=>setEditing(true)}>Editar perfil</button></div><div className="portal-profile-grid"><Info icon={<Mail/>} label="Correo" value={partner.email}/><Info icon={<MapPin/>} label="Dirección" value={partner.address}/><Info icon={<Store/>} label="RUT" value={partner.rut}/><Info icon={<Truck/>} label="Envíos" value={partner.has_shipping?`Sí · ${money(partner.shipping_cost||0)}`:'No configurados'}/><Info icon={<DollarSign/>} label="IVA" value={`${partner.iva_rate||0}%${partner.iva_included_in_price?' incluido':''}`}/><Info icon={<CheckCircle/>} label="Mercado Pago" value={partner.mercadopago_connected?'Conectado':'Pendiente'}/><Info icon={<Package/>} label="Plan" value={`${partner.subscription_plan_tier || 'starter'} · ${partner.subscription_plan_status || 'sin estado'}`}/><Info icon={<CalendarDays/>} label="Vencimiento del plan" value={date(partner.subscription_plan_expires_at)}/><Info icon={<MapPin/>} label="Coordenadas" value={partner.latitud && partner.longitud ? `${partner.latitud}, ${partner.longitud}` : null}/></div></div></Module>;
+  const plan = getPartnerPlan(accountSubscription?.subscriptionPlanTier || partner.subscription_plan_tier);
+  const status = getPartnerSubscriptionStatusLabel(accountSubscription?.subscriptionPlanStatus || partner.subscription_plan_status, accountSubscription?.subscriptionPlanExpiresAt || partner.subscription_plan_expires_at);
+  return <Module title="Perfil y configuración" description="Información pública, fiscal y operativa de tu negocio.">{editing&&<PartnerProfileModal partner={partner} onClose={()=>setEditing(false)} onSaved={()=>{setEditing(false);onSaved();}}/>}<div className="portal-profile"><div className="portal-profile-brand">{partner.logo?<img src={partner.logo} alt={`Logo de ${partner.business_name}`}/>:<Store/>}<div><p>{partner.business_type}</p><h3>{partner.business_name}</h3><span>{partner.is_verified?'Negocio verificado':'Verificación pendiente'} · {partner.approval_status || 'pending'}</span></div><button className="portal-primary" onClick={()=>setEditing(true)}>Editar perfil</button></div><div className="portal-plan-profile-banner"><div><small>Suscripción de la cuenta</small><strong>Plan {plan.name}</strong><span>{status} · Se aplica a todos tus negocios verificados</span></div><button className="portal-secondary" onClick={onSubscription}>Gestionar suscripción</button></div><div className="portal-profile-grid"><Info icon={<Mail/>} label="Correo" value={partner.email}/><Info icon={<MapPin/>} label="Dirección" value={partner.address}/><Info icon={<Store/>} label="RUT" value={partner.rut}/><Info icon={<Truck/>} label="Envíos" value={partner.has_shipping?`Sí · ${money(partner.shipping_cost||0)}`:'No configurados'}/><Info icon={<DollarSign/>} label="IVA" value={`${partner.iva_rate||0}%${partner.iva_included_in_price?' incluido':''}`}/><Info icon={<CheckCircle/>} label="Mercado Pago del aliado" value={partner.mercadopago_connected?'Conectado · cobro directo':'Pendiente de conexión'}/><Info icon={<Package/>} label="Plan efectivo" value={`${plan.name} · ${status}`}/><Info icon={<CalendarDays/>} label="Vencimiento del plan" value={date(accountSubscription?.subscriptionPlanExpiresAt || partner.subscription_plan_expires_at)}/><Info icon={<MapPin/>} label="Coordenadas" value={partner.latitud && partner.longitud ? `${partner.latitud}, ${partner.longitud}` : null}/></div></div></Module>;
 }
 
 function Module({title,description,children}:{title:string;description:string;children:ReactNode}) { return <section className="portal-module"><div className="portal-module-heading"><div><p>Portal de aliados</p><h2>{title}</h2></div><span>{description}</span></div>{children}</section> }
