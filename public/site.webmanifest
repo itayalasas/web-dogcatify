@@ -1,0 +1,16 @@
+{
+  "name": "DogCatiFy",
+  "short_name": "DogCatiFy",
+  "description": "Todo para cuidar mejor a tu mascota.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F7F2E8",
+  "theme_color": "#2D6A6F",
+  "icons": [
+    {
+      "src": "/logo-transp.png",
+      "sizes": "1024x1024",
+      "type": "image/png"
+    }
+  ]
+}
