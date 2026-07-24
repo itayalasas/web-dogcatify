@@ -179,7 +179,7 @@ export default function PartnerDashboard() {
     <div className="partner-dashboard">
       <aside className={`partner-sidebar ${mobileMenuOpen ? 'is-open' : ''}`}>
         <div className="partner-brand">
-          <img src="/logo-transp.png" alt="DogCatiFy" />
+          <span className="partner-brand-logo" aria-hidden="true" />
           <div>
             <strong>DogCatiFy</strong>
             <span>Portal de aliados</span>

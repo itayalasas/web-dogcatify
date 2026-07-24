@@ -45,7 +45,7 @@ const Login = () => {
       <a href="#acceso" className="partner-login-skip">Saltar al formulario</a>
       <section className="partner-login-story">
         <button type="button" onClick={() => navigate('/')} className="partner-login-brand">
-          <img src="/logo-transp.png" alt="" /><span>DogCatiFy</span>
+          <span className="partner-login-mark" aria-hidden="true" /><span>DogCatiFy</span>
         </button>
         <div className="partner-login-copy">
           <p className="partner-login-eyebrow">Portal de aliados</p>

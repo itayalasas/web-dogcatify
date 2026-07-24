@@ -47,6 +47,15 @@
   filter: saturate(1.8) contrast(2.4) brightness(.68);
 }
 
+.partner-brand-logo {
+  display: block;
+  width: 48px;
+  height: 48px;
+  flex: 0 0 auto;
+  border-radius: 15px;
+  background: var(--partner-ivory) url('/logo-dogcatify.jpg') center -9px / 88px 88px no-repeat;
+}
+
 .partner-brand strong,
 .partner-brand span {
   display: block;
