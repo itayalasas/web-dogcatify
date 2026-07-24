@@ -44,6 +44,7 @@
   background: var(--partner-ivory);
   object-fit: contain;
   padding: 5px;
+  filter: saturate(1.8) contrast(2.4) brightness(.68);
 }
 
 .partner-brand strong,
