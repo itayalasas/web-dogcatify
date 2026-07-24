@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AlertCircle, ArrowLeft, Check, Eye, EyeOff, Lock, LogIn, Mail } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Check, Eye, EyeOff, Lock, LogIn, Mail, PawPrint } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { logAction, logError } from '../services/audit.service';
 import './login.css';
@@ -45,7 +45,7 @@ const Login = () => {
       <a href="#acceso" className="partner-login-skip">Saltar al formulario</a>
       <section className="partner-login-story">
         <button type="button" onClick={() => navigate('/')} className="partner-login-brand">
-          <span className="partner-login-mark" aria-hidden="true" /><span>DogCatiFy</span>
+          <span className="partner-login-mark" aria-hidden="true"><PawPrint /></span><span>DogCatiFy</span>
         </button>
         <div className="partner-login-copy">
           <p className="partner-login-eyebrow">Portal de aliados</p>

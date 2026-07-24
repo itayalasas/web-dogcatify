@@ -13,6 +13,7 @@ import {
   Menu,
   MessageSquare,
   Package,
+  PawPrint,
   Settings,
   ShoppingBag,
   Star,
@@ -179,7 +180,7 @@ export default function PartnerDashboard() {
     <div className="partner-dashboard">
       <aside className={`partner-sidebar ${mobileMenuOpen ? 'is-open' : ''}`}>
         <div className="partner-brand">
-          <span className="partner-brand-logo" aria-hidden="true" />
+          <span className="partner-brand-logo" aria-hidden="true"><PawPrint /></span>
           <div>
             <strong>DogCatiFy</strong>
             <span>Portal de aliados</span>
