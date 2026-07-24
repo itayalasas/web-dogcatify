@@ -23,7 +23,7 @@ const Login = () => {
       if (authError) {
         setError('Credenciales incorrectas. Verificá tu correo y contraseña.');
         logError('LOGIN_FAILED', 'Credenciales incorrectas', {
-          error_code: authError.status || 'unknown',
+          error_code: 'status' in authError ? String(authError.status) : 'unknown',
           error_message: authError.message || 'Invalid credentials',
         }, email);
         return;

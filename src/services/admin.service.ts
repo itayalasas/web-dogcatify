@@ -163,6 +163,16 @@ export interface Partner {
   has_shipping?: boolean | null;
   shipping_cost?: number | null;
   free_shipping_threshold?: number | null;
+  images?: string[] | null;
+  country_id?: string | null;
+  department_id?: string | null;
+  latitud?: string | number | null;
+  longitud?: string | number | null;
+  approval_status?: string | null;
+  subscription_plan_tier?: string | null;
+  subscription_plan_status?: string | null;
+  subscription_plan_started_at?: string | null;
+  subscription_plan_expires_at?: string | null;
 }
 
 export interface AdminSettings {
@@ -254,6 +264,15 @@ export interface PartnerProduct {
   is_active: boolean | null;
   images: string[] | null;
   partner_name: string | null;
+  iva_rate?: number | null;
+  brand?: string | null;
+  weight?: string | null;
+  size?: string | null;
+  color?: string | null;
+  age_range?: string | null;
+  pet_type?: string | null;
+  currency?: string | null;
+  currency_code_dgi?: string | null;
   created_at: string | null;
 }
 

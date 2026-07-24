@@ -313,13 +313,20 @@ export const partnerReviewsService = {
 
 export const partnerOrdersService = {
   async getMyOrders(partnerId: string) {
+    const breakdownFilter = JSON.stringify({ partners: { [partnerId]: {} } });
     const { data, error } = await supabase
       .from('orders')
       .select('*')
-      .eq('partner_id', partnerId)
+      .or(`partner_id.eq.${partnerId},partner_breakdown.cs.${breakdownFilter}`)
+      .eq('is_split_master', false)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
-    return data;
+    return (data || []).filter((order: any) => {
+      if (order?.is_split_master) return false;
+      if (order?.partner_id === partnerId) return true;
+      if (order?.partner_breakdown?.partners && Object.prototype.hasOwnProperty.call(order.partner_breakdown.partners, partnerId)) return true;
+      return Array.isArray(order?.items) && order.items.some((item: any) => item?.partnerId === partnerId || item?.partner_id === partnerId);
+    });
   }
 };

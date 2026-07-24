@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Building2, Save, X } from 'lucide-react';
 import { Partner, partnersService } from '../../services/admin.service';
+import { supabase } from '../../lib/supabase';
 
-const businessTypes = [['veterinary','Veterinaria'],['grooming','Peluquería'],['walking','Paseos'],['boarding','Pensión'],['daycare','Guardería'],['shop','Tienda'],['shelter','Refugio']];
+const businessTypes = [['veterinary','Veterinaria'],['grooming','Peluquería'],['walking','Paseador'],['boarding','Pensión'],['shop','Tienda'],['shelter','Refugio']];
 
 export default function PartnerProfileModal({ partner, onClose, onSaved }: { partner: Partner; onClose: () => void; onSaved: () => void }) {
   const [form, setForm] = useState({
@@ -10,23 +11,50 @@ export default function PartnerProfileModal({ partner, onClose, onSaved }: { par
     description: partner.description || '', email: partner.email || '', phone: partner.phone || '',
     rut: partner.rut || '', calle: partner.calle || '', numero: partner.numero || '',
     barrio: partner.barrio || '', codigo_postal: partner.codigo_postal || '',
+    country_id: partner.country_id || '', department_id: partner.department_id || '',
+    latitud: String(partner.latitud ?? ''), longitud: String(partner.longitud ?? ''),
+    logo: partner.logo || '', image: partner.images?.[0] || '',
     iva_rate: String(partner.iva_rate ?? 0), iva_included_in_price: Boolean(partner.iva_included_in_price),
     has_shipping: Boolean(partner.has_shipping), shipping_cost: String(partner.shipping_cost ?? 0),
     free_shipping_threshold: String(partner.free_shipping_threshold ?? 0),
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [countries, setCountries] = useState<{ id: string; name: string }[]>([]);
+  const [departments, setDepartments] = useState<{ id: string; name: string }[]>([]);
   const set = (key: string, value: string | boolean) => setForm(current => ({ ...current, [key]: value }));
+
+  useEffect(() => {
+    supabase.from('countries').select('id,name').order('name').then(({ data }) => setCountries(data || []));
+  }, []);
+
+  useEffect(() => {
+    if (!form.country_id) {
+      setDepartments([]);
+      return;
+    }
+    supabase.from('departments').select('id,name').eq('country_id', form.country_id).order('name').then(({ data }) => setDepartments(data || []));
+  }, [form.country_id]);
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault(); setSaving(true); setError('');
     try {
-      const simpleAddress = `${form.calle.trim()} ${form.numero.trim()}${form.barrio.trim() ? `, ${form.barrio.trim()}` : ''}`.trim();
+      const country = countries.find(item => item.id === form.country_id)?.name;
+      const department = departments.find(item => item.id === form.department_id)?.name;
+      const simpleAddress = [
+        `${form.calle.trim()} ${form.numero.trim()}`.trim(),
+        form.barrio.trim(),
+        department,
+        country,
+      ].filter(Boolean).join(', ');
       await partnersService.updateProfile(partner.id, {
         business_name: form.business_name.trim(), business_type: form.business_type,
         description: form.description.trim(), email: form.email.trim(), phone: form.phone.trim(),
         rut: form.rut.trim(), calle: form.calle.trim(), numero: form.numero.trim(),
         barrio: form.barrio.trim() || null, codigo_postal: form.codigo_postal.trim() || null,
+        country_id: form.country_id || null, department_id: form.department_id || null,
+        latitud: form.latitud.trim() || null, longitud: form.longitud.trim() || null,
+        logo: form.logo.trim() || null, images: form.image.trim() ? [form.image.trim()] : partner.images,
         address: simpleAddress || partner.address, iva_rate: Number(form.iva_rate) || 0,
         iva_included_in_price: form.iva_included_in_price, has_shipping: form.has_shipping,
         shipping_cost: form.has_shipping ? Number(form.shipping_cost) || 0 : 0,
@@ -53,10 +81,16 @@ export default function PartnerProfileModal({ partner, onClose, onSaved }: { par
           <Field label="Teléfono *"><input type="tel" required value={form.phone} onChange={e=>set('phone',e.target.value)}/></Field>
           <Field label="RUT *"><input required value={form.rut} onChange={e=>set('rut',e.target.value)}/></Field>
           <Field label="Código postal"><input value={form.codigo_postal} onChange={e=>set('codigo_postal',e.target.value)}/></Field>
+          <Field label="País"><select value={form.country_id} onChange={e=>{set('country_id',e.target.value);set('department_id','');}}><option value="">Seleccionar país</option>{countries.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></Field>
+          <Field label="Departamento"><select value={form.department_id} onChange={e=>set('department_id',e.target.value)}><option value="">Seleccionar departamento</option>{departments.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></Field>
           <Field label="Calle *"><input required value={form.calle} onChange={e=>set('calle',e.target.value)}/></Field>
           <Field label="Número *"><input required value={form.numero} onChange={e=>set('numero',e.target.value)}/></Field>
           <Field label="Barrio"><input value={form.barrio} onChange={e=>set('barrio',e.target.value)}/></Field>
+          <Field label="Latitud"><input inputMode="decimal" value={form.latitud} onChange={e=>set('latitud',e.target.value)}/></Field>
+          <Field label="Longitud"><input inputMode="decimal" value={form.longitud} onChange={e=>set('longitud',e.target.value)}/></Field>
           <Field label="IVA (%)"><input type="number" min="0" step="0.01" value={form.iva_rate} onChange={e=>set('iva_rate',e.target.value)}/></Field>
+          <Field label="URL del logo"><input type="url" value={form.logo} onChange={e=>set('logo',e.target.value)}/></Field>
+          <Field label="URL de imagen principal"><input type="url" value={form.image} onChange={e=>set('image',e.target.value)}/></Field>
           <div className="md:col-span-2"><Field label="Descripción *"><textarea required rows={4} value={form.description} onChange={e=>set('description',e.target.value)}/></Field></div>
         </div>
         <div className="mt-8 grid gap-4 rounded-2xl bg-[#DCEBE7]/65 p-5 md:grid-cols-2">
