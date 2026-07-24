@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { partnerReviewsService } from '../../services/partner.service';
 import { ServiceReview } from '../../services/admin.service';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { Star } from 'lucide-react';
 
-const MyReviews = () => {
+const MyReviews = ({ partnerId: requestedPartnerId }: { partnerId?: string }) => {
   const { profile } = useAuth();
   const [reviews, setReviews] = useState<ServiceReview[]>([]);
   const [stats, setStats] = useState({ total: 0, avgRating: '0' });
@@ -13,10 +13,14 @@ const MyReviews = () => {
   const [partnerId, setPartnerId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (profile?.id) {
+    if (requestedPartnerId) {
+      setPartnerId(requestedPartnerId);
+      loadReviews(requestedPartnerId);
+      loadStats(requestedPartnerId);
+    } else if (profile?.id) {
       loadPartnerData();
     }
-  }, [profile]);
+  }, [profile?.id, requestedPartnerId]);
 
   const loadPartnerData = async () => {
     if (!profile?.id) return;

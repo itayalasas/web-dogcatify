@@ -28,11 +28,20 @@ interface Service {
 interface BusinessServicesProps {
   place: Place;
   partnerId: string;
+  accountPartnerIds: string[];
+  maxServices: number | null;
   onBack: () => void;
 }
 
-const BusinessServices = ({ place, partnerId, onBack }: BusinessServicesProps) => {
+const BusinessServices = ({
+  place,
+  partnerId,
+  accountPartnerIds,
+  maxServices,
+  onBack,
+}: BusinessServicesProps) => {
   const [services, setServices] = useState<Service[]>([]);
+  const [accountServiceCount, setAccountServiceCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingService, setEditingService] = useState<Service | null>(null);
@@ -44,15 +53,23 @@ const BusinessServices = ({ place, partnerId, onBack }: BusinessServicesProps) =
   const loadServices = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('partner_services')
-        .select('*')
-        .eq('place_id', place.id)
-        .order('created_at', { ascending: false });
+      const [placeResult, accountResult] = await Promise.all([
+        supabase
+          .from('partner_services')
+          .select('*')
+          .eq('place_id', place.id)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('partner_services')
+          .select('id', { count: 'exact', head: true })
+          .in('partner_id', accountPartnerIds.length ? accountPartnerIds : [partnerId]),
+      ]);
 
-      if (error) throw error;
+      if (placeResult.error) throw placeResult.error;
+      if (accountResult.error) throw accountResult.error;
 
-      setServices(data || []);
+      setServices(placeResult.data || []);
+      setAccountServiceCount(accountResult.count || 0);
     } catch (error) {
       console.error('Error loading services:', error);
     } finally {
@@ -78,6 +95,15 @@ const BusinessServices = ({ place, partnerId, onBack }: BusinessServicesProps) =
 
   const handleEdit = (service: Service) => {
     setEditingService(service);
+    setShowForm(true);
+  };
+
+  const canCreateService = maxServices === null || accountServiceCount < maxServices;
+  const openNewService = () => {
+    if (!canCreateService) {
+      alert(`Tu plan permite hasta ${maxServices} servicios en toda la cuenta. Actualiza la suscripción para agregar otro.`);
+      return;
+    }
     setShowForm(true);
   };
 
@@ -115,13 +141,17 @@ const BusinessServices = ({ place, partnerId, onBack }: BusinessServicesProps) =
             <p className="text-sm text-gray-500 mt-1">{place.address}</p>
           </div>
           <button
-            onClick={() => setShowForm(true)}
-            className="bg-teal-600 text-white px-4 py-2 rounded-lg hover:bg-teal-700 transition-colors flex items-center"
+            onClick={openNewService}
+            disabled={!canCreateService}
+            className="bg-teal-600 text-white px-4 py-2 rounded-lg hover:bg-teal-700 transition-colors flex items-center disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Plus className="h-5 w-5 mr-2" />
             Agregar Servicio
           </button>
         </div>
+        <p className="mt-3 text-xs font-medium text-gray-500">
+          Uso del plan: {accountServiceCount} / {maxServices === null ? 'sin límite' : maxServices} servicios
+        </p>
       </div>
 
       {loading ? (
@@ -201,8 +231,9 @@ const BusinessServices = ({ place, partnerId, onBack }: BusinessServicesProps) =
             <div className="text-center py-12 text-gray-500">
               <p className="mb-4">No hay servicios registrados para este negocio</p>
               <button
-                onClick={() => setShowForm(true)}
-                className="bg-teal-600 text-white px-6 py-3 rounded-lg hover:bg-teal-700 transition-colors inline-flex items-center"
+                onClick={openNewService}
+                disabled={!canCreateService}
+                className="bg-teal-600 text-white px-6 py-3 rounded-lg hover:bg-teal-700 transition-colors inline-flex items-center disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Plus className="h-5 w-5 mr-2" />
                 Agregar Primer Servicio

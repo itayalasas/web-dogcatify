@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { DollarSign, CheckCircle, XCircle, Clock, TrendingUp } from 'lucide-react';
+import { Building2, CheckCircle, Clock, DollarSign, TrendingUp, XCircle } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 
 interface Payment {
   id: string;
@@ -13,9 +14,9 @@ interface Payment {
   partner_name: string | null;
   customer_name: string | null;
   created_at: string;
-  commission_amount: number | null;
-  partner_amount: number | null;
 }
+
+const isPaid = (status: string) => ['approved', 'paid', 'completed'].includes(status);
 
 const PaymentsManager = () => {
   const [payments, setPayments] = useState<Payment[]>([]);
@@ -24,8 +25,7 @@ const PaymentsManager = () => {
     total: 0,
     approved: 0,
     pending: 0,
-    totalAmount: 0,
-    commissionAmount: 0
+    salesVolume: 0,
   });
 
   useEffect(() => {
@@ -39,13 +39,13 @@ const PaymentsManager = () => {
       const [ordersResult, bookingsResult] = await Promise.all([
         supabase
           .from('orders')
-          .select('id, total_amount, payment_status, payment_method, payment_id, partner_name, customer_name, created_at, commission_amount, partner_amount')
+          .select('id, total_amount, payment_status, payment_method, payment_id, partner_name, customer_name, created_at')
           .not('payment_status', 'is', null)
           .order('created_at', { ascending: false })
           .limit(100),
         supabase
           .from('bookings')
-          .select('id, total_amount, payment_status, payment_method, payment_id, partner_name, customer_name, created_at, commission_amount, partner_amount')
+          .select('id, total_amount, payment_status, payment_method, payment_id, partner_name, customer_name, created_at')
           .not('payment_status', 'is', null)
           .order('created_at', { ascending: false })
           .limit(100)
@@ -60,21 +60,17 @@ const PaymentsManager = () => {
 
       setPayments(allPayments);
 
-      const approved = allPayments.filter(p => p.payment_status === 'approved').length;
+      const approved = allPayments.filter(p => isPaid(p.payment_status)).length;
       const pending = allPayments.filter(p => p.payment_status === 'pending').length;
-      const totalAmount = allPayments
-        .filter(p => p.payment_status === 'approved')
+      const salesVolume = allPayments
+        .filter(p => isPaid(p.payment_status))
         .reduce((sum, p) => sum + (p.amount || 0), 0);
-      const commissionAmount = allPayments
-        .filter(p => p.payment_status === 'approved')
-        .reduce((sum, p) => sum + (p.commission_amount || 0), 0);
 
       setStats({
         total: allPayments.length,
         approved,
         pending,
-        totalAmount,
-        commissionAmount
+        salesVolume,
       });
     } catch (error) {
       console.error('Error loading payments:', error);
@@ -84,8 +80,10 @@ const PaymentsManager = () => {
   };
 
   const getStatusBadge = (status: string) => {
-    const statuses: Record<string, { icon: any; class: string; label: string }> = {
+    const statuses: Record<string, { icon: LucideIcon; class: string; label: string }> = {
       approved: { icon: CheckCircle, class: 'bg-green-100 text-green-800', label: 'Aprobado' },
+      paid: { icon: CheckCircle, class: 'bg-green-100 text-green-800', label: 'Pagado' },
+      completed: { icon: CheckCircle, class: 'bg-green-100 text-green-800', label: 'Completado' },
       pending: { icon: Clock, class: 'bg-yellow-100 text-yellow-800', label: 'Pendiente' },
       rejected: { icon: XCircle, class: 'bg-red-100 text-red-800', label: 'Rechazado' }
     };
@@ -117,17 +115,18 @@ const PaymentsManager = () => {
         </div>
         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
           <div className="flex items-center justify-between mb-2">
-            <p className="text-sm text-gray-600">Monto Total</p>
+            <p className="text-sm text-gray-600">Volumen Cobrado</p>
             <TrendingUp className="h-5 w-5 text-green-600" />
           </div>
-          <p className="text-2xl font-bold text-green-600">${stats.totalAmount.toFixed(2)}</p>
+          <p className="text-2xl font-bold text-green-600">${stats.salesVolume.toFixed(2)}</p>
         </div>
         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
           <div className="flex items-center justify-between mb-2">
-            <p className="text-sm text-gray-600">Comisiones</p>
-            <DollarSign className="h-5 w-5 text-teal-600" />
+            <p className="text-sm text-gray-600">Destino del Cobro</p>
+            <Building2 className="h-5 w-5 text-teal-600" />
           </div>
-          <p className="text-2xl font-bold text-teal-600">${stats.commissionAmount.toFixed(2)}</p>
+          <p className="text-xl font-bold text-teal-600">Cuenta del aliado</p>
+          <p className="mt-1 text-xs text-gray-500">Pago directo, sin retención de la plataforma</p>
         </div>
         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
           <div className="flex items-center justify-between mb-2">
@@ -146,7 +145,7 @@ const PaymentsManager = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cliente</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Partner</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Monto</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Comisión</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Destino</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Método</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Estado</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Fecha</th>
@@ -164,7 +163,7 @@ const PaymentsManager = () => {
                     <div className="text-sm font-semibold text-gray-900">${payment.amount?.toFixed(2)}</div>
                   </td>
                   <td className="px-6 py-4">
-                    <div className="text-sm text-teal-600">${(payment.commission_amount || 0).toFixed(2)}</div>
+                    <div className="text-sm font-medium text-teal-700">Aliado</div>
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-600 capitalize">
                     {payment.payment_method || 'N/A'}

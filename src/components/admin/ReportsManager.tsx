@@ -1,6 +1,29 @@
-import React, { useState, useEffect } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
+import {
+  BarChart3,
+  Calendar,
+  CreditCard,
+  DollarSign,
+  PawPrint,
+  ShoppingCart,
+  Store,
+  TrendingUp,
+  Users,
+} from 'lucide-react';
 import { supabase } from '../../lib/supabase';
-import { TrendingUp, Users, Store, PawPrint, ShoppingCart, Calendar, DollarSign, BarChart3 } from 'lucide-react';
+import { isPartnerSubscriptionCurrent } from '../../utils/partnerPlans';
+
+type JoinedPlan = {
+  price_monthly?: number | null;
+  price_yearly?: number | null;
+  currency?: string | null;
+};
+
+const getJoinedPlan = (value: JoinedPlan | JoinedPlan[] | null | undefined) =>
+  Array.isArray(value) ? value[0] || null : value || null;
+
+const isPaid = (status?: string | null) =>
+  ['approved', 'paid', 'completed'].includes(String(status || '').toLowerCase());
 
 const ReportsManager = () => {
   const [loading, setLoading] = useState(true);
@@ -10,19 +33,21 @@ const ReportsManager = () => {
     totalPartners: 0,
     totalOrders: 0,
     totalBookings: 0,
-    totalRevenue: 0,
-    totalCommissions: 0,
+    salesVolume: 0,
+    subscriptionMrr: 0,
+    activeSubscriptions: 0,
+    trialSubscriptions: 0,
     avgOrderValue: 0,
-    topPartner: null as any,
+    topPartner: null as { business_name?: string | null } | null,
     recentGrowth: {
       users: 0,
       orders: 0,
-      bookings: 0
-    }
+      bookings: 0,
+    },
   });
 
   useEffect(() => {
-    loadStats();
+    void loadStats();
   }, []);
 
   const loadStats = async () => {
@@ -34,61 +59,102 @@ const ReportsManager = () => {
         petsResult,
         partnersResult,
         ordersResult,
-        bookingsResult
+        bookingsResult,
+        subscriptionsResult,
       ] = await Promise.all([
         supabase.from('profiles').select('id, created_at'),
         supabase.from('pets').select('id'),
         supabase.from('partners').select('id, business_name, is_active'),
-        supabase.from('orders').select('id, total_amount, commission_amount, created_at, payment_status'),
-        supabase.from('bookings').select('id, total_amount, commission_amount, created_at, partner_id')
+        supabase.from('orders').select('id, total_amount, created_at, payment_status'),
+        supabase.from('bookings').select('id, total_amount, created_at, partner_id'),
+        supabase
+          .from('partner_subscriptions')
+          .select(
+            'id, partner_id, status, billing_cycle, expires_at, trial_ends_at, subscription_plans ( price_monthly, price_yearly, currency )',
+          ),
       ]);
+
+      const failed = [
+        usersResult,
+        petsResult,
+        partnersResult,
+        ordersResult,
+        bookingsResult,
+        subscriptionsResult,
+      ].find((result) => result.error);
+      if (failed?.error) throw failed.error;
 
       const users = usersResult.data || [];
       const pets = petsResult.data || [];
       const partners = partnersResult.data || [];
       const orders = ordersResult.data || [];
       const bookings = bookingsResult.data || [];
+      const subscriptions = subscriptionsResult.data || [];
 
-      const approvedOrders = orders.filter(o => o.payment_status === 'approved');
-      const totalRevenue = approvedOrders.reduce((sum, o) => sum + (o.total_amount || 0), 0);
-      const totalCommissions = approvedOrders.reduce((sum, o) => sum + (o.commission_amount || 0), 0);
-      const avgOrderValue = approvedOrders.length > 0 ? totalRevenue / approvedOrders.length : 0;
+      const paidOrders = orders.filter((order) => isPaid(order.payment_status));
+      const salesVolume = paidOrders.reduce(
+        (sum, order) => sum + (Number(order.total_amount) || 0),
+        0,
+      );
+      const avgOrderValue = paidOrders.length > 0 ? salesVolume / paidOrders.length : 0;
+
+      const currentSubscriptions = subscriptions.filter((subscription) =>
+        isPartnerSubscriptionCurrent(
+          subscription.status,
+          subscription.expires_at || subscription.trial_ends_at,
+        ),
+      );
+      const activeSubscriptions = currentSubscriptions.filter(
+        (subscription) => String(subscription.status).toLowerCase() === 'active',
+      );
+      const trialSubscriptions = currentSubscriptions.filter(
+        (subscription) => String(subscription.status).toLowerCase() === 'trialing',
+      ).length;
+      const subscriptionMrr = activeSubscriptions.reduce((sum, subscription) => {
+        const plan = getJoinedPlan(subscription.subscription_plans as JoinedPlan | JoinedPlan[]);
+        const amount =
+          subscription.billing_cycle === 'yearly'
+            ? (Number(plan?.price_yearly) || 0) / 12
+            : Number(plan?.price_monthly) || 0;
+        return sum + amount;
+      }, 0);
 
       const now = new Date();
       const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
-
-      const recentUsers = users.filter(u => new Date(u.created_at) > lastMonth).length;
-      const recentOrders = orders.filter(o => new Date(o.created_at) > lastMonth).length;
-      const recentBookings = bookings.filter(b => new Date(b.created_at) > lastMonth).length;
+      const recentUsers = users.filter((user) => new Date(user.created_at) > lastMonth).length;
+      const recentOrders = orders.filter((order) => new Date(order.created_at) > lastMonth).length;
+      const recentBookings = bookings.filter(
+        (booking) => new Date(booking.created_at) > lastMonth,
+      ).length;
 
       const partnerBookings: Record<string, number> = {};
-      bookings.forEach(b => {
-        if (b.partner_id) {
-          partnerBookings[b.partner_id] = (partnerBookings[b.partner_id] || 0) + 1;
+      bookings.forEach((booking) => {
+        if (booking.partner_id) {
+          partnerBookings[booking.partner_id] = (partnerBookings[booking.partner_id] || 0) + 1;
         }
       });
-
-      const topPartnerId = Object.keys(partnerBookings).reduce((a, b) =>
-        partnerBookings[a] > partnerBookings[b] ? a : b, Object.keys(partnerBookings)[0]
-      );
-
-      const topPartner = partners.find(p => p.id === topPartnerId);
+      const topPartnerId = Object.entries(partnerBookings).sort((a, b) => b[1] - a[1])[0]?.[0];
+      const topPartner = topPartnerId
+        ? partners.find((partner) => partner.id === topPartnerId) || null
+        : null;
 
       setStats({
         totalUsers: users.length,
         totalPets: pets.length,
-        totalPartners: partners.filter(p => p.is_active).length,
+        totalPartners: partners.filter((partner) => partner.is_active).length,
         totalOrders: orders.length,
         totalBookings: bookings.length,
-        totalRevenue,
-        totalCommissions,
+        salesVolume,
+        subscriptionMrr,
+        activeSubscriptions: activeSubscriptions.length,
+        trialSubscriptions,
         avgOrderValue,
         topPartner,
         recentGrowth: {
           users: recentUsers,
           orders: recentOrders,
-          bookings: recentBookings
-        }
+          bookings: recentBookings,
+        },
       });
     } catch (error) {
       console.error('Error loading stats:', error);
@@ -98,144 +164,140 @@ const ReportsManager = () => {
   };
 
   if (loading) {
-    return <div className="text-center py-12">Cargando reportes...</div>;
+    return <div className="py-12 text-center">Cargando reportes...</div>;
   }
 
   return (
     <div className="space-y-6">
-      <div>
-        <h3 className="text-lg font-semibold text-gray-800 mb-4">Resumen General</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-200">
-            <div className="flex items-center justify-between mb-4">
-              <div className="bg-blue-100 p-3 rounded-lg">
-                <Users className="h-6 w-6 text-blue-600" />
-              </div>
-              <span className="text-green-600 text-sm font-medium">+{stats.recentGrowth.users}</span>
-            </div>
-            <h3 className="text-gray-600 text-sm mb-1">Total Usuarios</h3>
-            <p className="text-3xl font-bold text-gray-800">{stats.totalUsers}</p>
-          </div>
-
-          <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-200">
-            <div className="flex items-center justify-between mb-4">
-              <div className="bg-purple-100 p-3 rounded-lg">
-                <PawPrint className="h-6 w-6 text-purple-600" />
-              </div>
-            </div>
-            <h3 className="text-gray-600 text-sm mb-1">Total Mascotas</h3>
-            <p className="text-3xl font-bold text-gray-800">{stats.totalPets}</p>
-          </div>
-
-          <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-200">
-            <div className="flex items-center justify-between mb-4">
-              <div className="bg-teal-100 p-3 rounded-lg">
-                <Store className="h-6 w-6 text-teal-600" />
-              </div>
-            </div>
-            <h3 className="text-gray-600 text-sm mb-1">Partners Activos</h3>
-            <p className="text-3xl font-bold text-gray-800">{stats.totalPartners}</p>
-          </div>
-
-          <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-200">
-            <div className="flex items-center justify-between mb-4">
-              <div className="bg-green-100 p-3 rounded-lg">
-                <DollarSign className="h-6 w-6 text-green-600" />
-              </div>
-            </div>
-            <h3 className="text-gray-600 text-sm mb-1">Ingresos Totales</h3>
-            <p className="text-3xl font-bold text-gray-800">${stats.totalRevenue.toFixed(2)}</p>
-          </div>
+      <section>
+        <h3 className="mb-4 text-lg font-semibold text-gray-800">Resumen General</h3>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <MetricCard
+            label="Total Usuarios"
+            value={String(stats.totalUsers)}
+            icon={<Users className="h-6 w-6 text-blue-600" />}
+            iconClass="bg-blue-100"
+            detail={`+${stats.recentGrowth.users} último mes`}
+          />
+          <MetricCard
+            label="Total Mascotas"
+            value={String(stats.totalPets)}
+            icon={<PawPrint className="h-6 w-6 text-purple-600" />}
+            iconClass="bg-purple-100"
+          />
+          <MetricCard
+            label="Aliados Activos"
+            value={String(stats.totalPartners)}
+            icon={<Store className="h-6 w-6 text-teal-600" />}
+            iconClass="bg-teal-100"
+          />
+          <MetricCard
+            label="Volumen Vendido"
+            value={`$${stats.salesVolume.toFixed(2)}`}
+            icon={<DollarSign className="h-6 w-6 text-green-600" />}
+            iconClass="bg-green-100"
+            detail="Cobrado directamente por los aliados"
+          />
         </div>
-      </div>
+      </section>
 
-      <div>
-        <h3 className="text-lg font-semibold text-gray-800 mb-4">Métricas de Ventas</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-200">
-            <div className="flex items-center justify-between mb-4">
-              <div className="bg-amber-100 p-3 rounded-lg">
-                <ShoppingCart className="h-6 w-6 text-amber-600" />
-              </div>
-              <span className="text-green-600 text-sm font-medium">+{stats.recentGrowth.orders}</span>
-            </div>
-            <h3 className="text-gray-600 text-sm mb-1">Total Pedidos</h3>
-            <p className="text-3xl font-bold text-gray-800">{stats.totalOrders}</p>
-          </div>
-
-          <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-200">
-            <div className="flex items-center justify-between mb-4">
-              <div className="bg-indigo-100 p-3 rounded-lg">
-                <Calendar className="h-6 w-6 text-indigo-600" />
-              </div>
-              <span className="text-green-600 text-sm font-medium">+{stats.recentGrowth.bookings}</span>
-            </div>
-            <h3 className="text-gray-600 text-sm mb-1">Total Citas</h3>
-            <p className="text-3xl font-bold text-gray-800">{stats.totalBookings}</p>
-          </div>
-
-          <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-200">
-            <div className="flex items-center justify-between mb-4">
-              <div className="bg-emerald-100 p-3 rounded-lg">
-                <TrendingUp className="h-6 w-6 text-emerald-600" />
-              </div>
-            </div>
-            <h3 className="text-gray-600 text-sm mb-1">Valor Promedio Pedido</h3>
-            <p className="text-3xl font-bold text-gray-800">${stats.avgOrderValue.toFixed(2)}</p>
-          </div>
+      <section>
+        <h3 className="mb-4 text-lg font-semibold text-gray-800">Métricas de Ventas</h3>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          <MetricCard
+            label="Total Pedidos"
+            value={String(stats.totalOrders)}
+            icon={<ShoppingCart className="h-6 w-6 text-amber-600" />}
+            iconClass="bg-amber-100"
+            detail={`+${stats.recentGrowth.orders} último mes`}
+          />
+          <MetricCard
+            label="Total Citas"
+            value={String(stats.totalBookings)}
+            icon={<Calendar className="h-6 w-6 text-indigo-600" />}
+            iconClass="bg-indigo-100"
+            detail={`+${stats.recentGrowth.bookings} último mes`}
+          />
+          <MetricCard
+            label="Valor Promedio Pedido"
+            value={`$${stats.avgOrderValue.toFixed(2)}`}
+            icon={<TrendingUp className="h-6 w-6 text-emerald-600" />}
+            iconClass="bg-emerald-100"
+          />
         </div>
-      </div>
+      </section>
 
-      <div>
-        <h3 className="text-lg font-semibold text-gray-800 mb-4">Información Financiera</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-200">
-            <div className="flex items-center justify-between mb-4">
-              <div className="bg-teal-100 p-3 rounded-lg">
-                <DollarSign className="h-6 w-6 text-teal-600" />
-              </div>
-            </div>
-            <h3 className="text-gray-600 text-sm mb-1">Comisiones Generadas</h3>
-            <p className="text-3xl font-bold text-teal-600">${stats.totalCommissions.toFixed(2)}</p>
-            <p className="text-xs text-gray-500 mt-2">
-              {((stats.totalCommissions / stats.totalRevenue) * 100 || 0).toFixed(1)}% del total
-            </p>
-          </div>
+      <section>
+        <h3 className="mb-4 text-lg font-semibold text-gray-800">
+          Suscripciones de Aliados
+        </h3>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <MetricCard
+            label="Ingreso Mensual Recurrente"
+            value={`$${stats.subscriptionMrr.toFixed(2)}`}
+            icon={<CreditCard className="h-6 w-6 text-[#2D6A6F]" />}
+            iconClass="bg-[#DCEBE7]"
+            detail={`${stats.activeSubscriptions} suscripciones pagas · ${stats.trialSubscriptions} en prueba`}
+          />
 
-          {stats.topPartner && (
-            <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-200">
-              <div className="flex items-center justify-between mb-4">
-                <div className="bg-yellow-100 p-3 rounded-lg">
-                  <BarChart3 className="h-6 w-6 text-yellow-600" />
-                </div>
-              </div>
-              <h3 className="text-gray-600 text-sm mb-1">Partner Destacado</h3>
-              <p className="text-xl font-bold text-gray-800">{stats.topPartner.business_name}</p>
-              <p className="text-xs text-gray-500 mt-2">Con más reservas este mes</p>
-            </div>
+          {stats.topPartner ? (
+            <MetricCard
+              label="Aliado Destacado"
+              value={stats.topPartner.business_name || 'Aliado'}
+              icon={<BarChart3 className="h-6 w-6 text-yellow-600" />}
+              iconClass="bg-yellow-100"
+              detail="Con más reservas registradas"
+            />
+          ) : (
+            <MetricCard
+              label="Modelo Comercial"
+              value="Suscripción SaaS"
+              icon={<Store className="h-6 w-6 text-violet-600" />}
+              iconClass="bg-violet-100"
+              detail="Sin porcentaje retenido sobre las ventas"
+            />
           )}
         </div>
-      </div>
+      </section>
 
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
-        <h3 className="text-sm font-semibold text-blue-800 mb-2">Crecimiento Último Mes</h3>
+      <div className="rounded-lg border border-blue-200 bg-blue-50 p-6">
+        <h3 className="mb-2 text-sm font-semibold text-blue-800">Crecimiento Último Mes</h3>
         <div className="grid grid-cols-3 gap-4 text-center">
-          <div>
-            <p className="text-2xl font-bold text-blue-600">+{stats.recentGrowth.users}</p>
-            <p className="text-xs text-blue-700">Nuevos Usuarios</p>
-          </div>
-          <div>
-            <p className="text-2xl font-bold text-blue-600">+{stats.recentGrowth.orders}</p>
-            <p className="text-xs text-blue-700">Nuevos Pedidos</p>
-          </div>
-          <div>
-            <p className="text-2xl font-bold text-blue-600">+{stats.recentGrowth.bookings}</p>
-            <p className="text-xs text-blue-700">Nuevas Citas</p>
-          </div>
+          <Growth value={stats.recentGrowth.users} label="Nuevos Usuarios" />
+          <Growth value={stats.recentGrowth.orders} label="Nuevos Pedidos" />
+          <Growth value={stats.recentGrowth.bookings} label="Nuevas Citas" />
         </div>
       </div>
     </div>
   );
 };
+
+const MetricCard = ({
+  label,
+  value,
+  icon,
+  iconClass,
+  detail,
+}: {
+  label: string;
+  value: string;
+  icon: ReactNode;
+  iconClass: string;
+  detail?: string;
+}) => (
+  <article className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+    <div className={`mb-4 inline-flex rounded-lg p-3 ${iconClass}`}>{icon}</div>
+    <h3 className="mb-1 text-sm text-gray-600">{label}</h3>
+    <p className="text-3xl font-bold text-gray-800">{value}</p>
+    {detail && <p className="mt-2 text-xs text-gray-500">{detail}</p>}
+  </article>
+);
+
+const Growth = ({ value, label }: { value: number; label: string }) => (
+  <div>
+    <p className="text-2xl font-bold text-blue-600">+{value}</p>
+    <p className="text-xs text-blue-700">{label}</p>
+  </div>
+);
 
 export default ReportsManager;

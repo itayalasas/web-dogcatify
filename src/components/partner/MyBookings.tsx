@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { partnerBookingsService } from '../../services/partner.service';
 import { Booking } from '../../services/admin.service';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { Calendar, CheckCircle, Clock, XCircle, AlertCircle, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 
-const MyBookings = () => {
+const MyBookings = ({ partnerId: requestedPartnerId }: { partnerId?: string }) => {
   const { profile } = useAuth();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [initialLoading, setInitialLoading] = useState(true);
@@ -26,10 +26,13 @@ const MyBookings = () => {
   const itemsPerPage = 10;
 
   useEffect(() => {
-    if (profile?.id) {
+    if (requestedPartnerId) {
+      setPartnerId(requestedPartnerId);
+      loadBookings(requestedPartnerId, true);
+    } else if (profile?.id) {
       loadPartnerData();
     }
-  }, [profile]);
+  }, [profile?.id, requestedPartnerId]);
 
   const loadPartnerData = async () => {
     if (!profile?.id) return;

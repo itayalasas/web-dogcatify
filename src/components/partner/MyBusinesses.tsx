@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { Store, Plus, MapPin, Eye } from 'lucide-react';
@@ -17,7 +17,15 @@ interface Place {
   images: string[] | null;
 }
 
-const MyBusinesses = () => {
+const MyBusinesses = ({
+  partnerId: requestedPartnerId,
+  accountPartnerIds = [],
+  maxServices = null,
+}: {
+  partnerId?: string;
+  accountPartnerIds?: string[];
+  maxServices?: number | null;
+}) => {
   const { profile } = useAuth();
   const [places, setPlaces] = useState<Place[]>([]);
   const [loading, setLoading] = useState(true);
@@ -26,10 +34,13 @@ const MyBusinesses = () => {
   const [showPlaceForm, setShowPlaceForm] = useState(false);
 
   useEffect(() => {
-    if (profile?.id) {
+    if (requestedPartnerId) {
+      setPartnerId(requestedPartnerId);
+      loadPlaces(requestedPartnerId);
+    } else if (profile?.id) {
       loadPartnerData();
     }
-  }, [profile]);
+  }, [profile?.id, requestedPartnerId]);
 
   const loadPartnerData = async () => {
     if (!profile?.id) return;
@@ -87,107 +98,10 @@ const MyBusinesses = () => {
       console.log('Places found:', data?.length || 0, 'Total count:', count);
       console.log('Places data:', data);
 
-      if (!data || data.length === 0) {
-        await checkAndMigrateServices(partnerIdToLoad);
-        return;
-      }
-
       setPlaces(data || []);
     } catch (error) {
       console.error('Error loading places:', error);
     } finally {
-      setLoading(false);
-    }
-  };
-
-  const checkAndMigrateServices = async (partnerIdToLoad: string) => {
-    try {
-      console.log('Checking for services without place...');
-
-      const { data: services, error: servicesError } = await supabase
-        .from('partner_services')
-        .select('id')
-        .eq('partner_id', partnerIdToLoad)
-        .is('place_id', null);
-
-      if (servicesError) throw servicesError;
-
-      if (services && services.length > 0) {
-        console.log(`Found ${services.length} services without place. Creating default place...`);
-        await createDefaultPlace(partnerIdToLoad);
-      } else {
-        console.log('No services without place found');
-        setPlaces([]);
-        setLoading(false);
-      }
-    } catch (error) {
-      console.error('Error checking services:', error);
-      setPlaces([]);
-      setLoading(false);
-    }
-  };
-
-  const createDefaultPlace = async (partnerIdToLoad: string) => {
-    try {
-      const { data: partner, error: partnerError } = await supabase
-        .from('partners')
-        .select('business_name, business_type, address, phone, description')
-        .eq('id', partnerIdToLoad)
-        .maybeSingle();
-
-      if (partnerError) throw partnerError;
-      if (!partner) {
-        console.error('Partner not found');
-        setLoading(false);
-        return;
-      }
-
-      const categoryMap: Record<string, string> = {
-        'walking': 'paseador',
-        'veterinary': 'veterinaria',
-        'grooming': 'peluqueria',
-        'daycare': 'guarderia',
-        'hotel': 'hotel',
-        'store': 'tienda',
-        'training': 'adiestramiento'
-      };
-
-      const category = categoryMap[partner.business_type] || 'paseador';
-
-      const { data: newPlace, error: placeError } = await supabase
-        .from('places')
-        .insert([{
-          partner_id: partnerIdToLoad,
-          name: partner.business_name,
-          category: category,
-          address: partner.address || 'Dirección no especificada',
-          phone: partner.phone,
-          description: partner.description || '',
-          is_active: true,
-          rating: 5
-        }])
-        .select()
-        .single();
-
-      if (placeError) throw placeError;
-
-      console.log('Default place created:', newPlace);
-
-      const { error: updateError } = await supabase
-        .from('partner_services')
-        .update({ place_id: newPlace.id })
-        .eq('partner_id', partnerIdToLoad)
-        .is('place_id', null);
-
-      if (updateError) throw updateError;
-
-      console.log('Services migrated to new place');
-
-      setPlaces([newPlace]);
-      setLoading(false);
-    } catch (error) {
-      console.error('Error creating default place:', error);
-      setPlaces([]);
       setLoading(false);
     }
   };
@@ -213,6 +127,8 @@ const MyBusinesses = () => {
       <BusinessServices
         place={selectedPlace}
         partnerId={partnerId!}
+        accountPartnerIds={accountPartnerIds.length ? accountPartnerIds : [partnerId!]}
+        maxServices={maxServices}
         onBack={() => setSelectedPlace(null)}
       />
     );

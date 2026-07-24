@@ -67,8 +67,8 @@ export const dashboardService = {
         supabase.from('pets').select('*', { count: 'exact', head: true }),
         supabase.from('pets').select('*', { count: 'exact', head: true }).gte('created_at', firstDayThisMonth.toISOString()),
         supabase.from('pets').select('*', { count: 'exact', head: true }).gte('created_at', firstDayLastMonth.toISOString()).lte('created_at', lastDayLastMonth.toISOString()),
-        supabase.from('orders').select('total_amount').eq('status', 'paid').gte('created_at', firstDayThisMonth.toISOString()),
-        supabase.from('orders').select('total_amount').eq('status', 'paid').gte('created_at', firstDayLastMonth.toISOString()).lte('created_at', lastDayLastMonth.toISOString()),
+        supabase.from('orders').select('total_amount').in('payment_status', ['approved', 'paid', 'completed']).gte('created_at', firstDayThisMonth.toISOString()),
+        supabase.from('orders').select('total_amount').in('payment_status', ['approved', 'paid', 'completed']).gte('created_at', firstDayLastMonth.toISOString()).lte('created_at', lastDayLastMonth.toISOString()),
         supabase.from('orders').select('*', { count: 'exact', head: true }),
         supabase.from('orders').select('*', { count: 'exact', head: true }).gte('created_at', firstDayThisMonth.toISOString()),
         supabase.from('bookings').select('*', { count: 'exact', head: true }).eq('status', 'confirmed'),
@@ -130,7 +130,7 @@ export const dashboardService = {
       const { data: orders, error } = await supabase
         .from('orders')
         .select('created_at, total_amount')
-        .eq('status', 'paid')
+        .in('payment_status', ['approved', 'paid', 'completed'])
         .gte('created_at', startDate.toISOString())
         .order('created_at', { ascending: true });
 

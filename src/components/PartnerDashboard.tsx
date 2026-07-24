@@ -1,232 +1,392 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
-  LogOut,
+  BarChart3,
+  Briefcase,
   Calendar,
-  Package,
-  ShoppingCart,
-  Star,
-  TrendingUp,
-  MapPin,
-  MessageSquare,
-  Settings,
-  Clock,
+  CalendarPlus,
+  ChevronDown,
+  Clock3,
   DollarSign,
+  LayoutDashboard,
+  LogOut,
+  Menu,
+  MessageSquare,
+  Package,
+  PawPrint,
+  ShieldCheck,
+  Settings,
+  ShoppingBag,
+  Star,
+  Store,
   Users,
+  X,
 } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../lib/supabase';
+import type { Partner } from '../services/admin.service';
+import {
+  subscriptionService,
+  type SubscriptionPlan,
+} from '../services/subscription.service';
+import {
+  canAccessPartnerModule,
+  getPartnerLockedActionLabel,
+  getPartnerPlan,
+  getPartnerSubscriptionStatusLabel,
+  normalizePartnerPlanTier,
+  resolvePartnerAccountSubscription,
+  type PartnerModule,
+} from '../utils/partnerPlans';
+import { resolvePartnerPlanLimits } from '../utils/subscriptionPlanLimits';
 import MyBookings from './partner/MyBookings';
-import MyServices from './partner/MyServices';
+import MyBusinesses from './partner/MyBusinesses';
 import MyReviews from './partner/MyReviews';
 import ManualBooking from './partner/ManualBooking';
+import {
+  PartnerClients,
+  PartnerEarnings,
+  PartnerMessages,
+  PartnerOrders,
+  PartnerOverview,
+  PartnerProducts,
+  PartnerSchedule,
+  PartnerSettings,
+} from './partner/PartnerPortalModules';
+import PartnerSubscriptionManager from './partner/PartnerSubscriptionManager';
+import './partner-dashboard.css';
 
-const PartnerDashboard = () => {
+type Section =
+  | 'overview'
+  | 'businesses'
+  | 'appointments'
+  | 'new-appointment'
+  | 'products'
+  | 'orders'
+  | 'clients'
+  | 'reviews'
+  | 'schedule'
+  | 'earnings'
+  | 'messages'
+  | 'subscription'
+  | 'settings';
+
+const menuItems = [
+  { id: 'overview', label: 'Vista general', icon: LayoutDashboard },
+  { id: 'businesses', label: 'Negocios y servicios', icon: Briefcase },
+  { id: 'appointments', label: 'Citas', icon: Calendar },
+  { id: 'new-appointment', label: 'Agendar cita', icon: CalendarPlus },
+  { id: 'products', label: 'Productos', icon: Package },
+  { id: 'orders', label: 'Pedidos', icon: ShoppingBag },
+  { id: 'clients', label: 'Clientes', icon: Users, module: 'clients' },
+  { id: 'reviews', label: 'Reseñas', icon: Star },
+  { id: 'schedule', label: 'Horarios', icon: Clock3 },
+  { id: 'earnings', label: 'Analítica de ventas', icon: DollarSign, module: 'insights' },
+  { id: 'messages', label: 'Mensajes', icon: MessageSquare },
+  { id: 'subscription', label: 'Plan y suscripción', icon: ShieldCheck },
+  { id: 'settings', label: 'Perfil y configuración', icon: Settings },
+] satisfies { id: Section; label: string; icon: typeof Store; module?: PartnerModule }[];
+
+const businessTypeLabel: Record<string, string> = {
+  veterinary: 'Veterinaria',
+  grooming: 'Peluquería',
+  walking: 'Paseos',
+  boarding: 'Pensión',
+  daycare: 'Guardería',
+  shop: 'Tienda',
+  shelter: 'Refugio',
+};
+
+export default function PartnerDashboard() {
   const { user, profile, signOut } = useAuth();
   const navigate = useNavigate();
-  const [activeSection, setActiveSection] = useState('overview');
+  const [searchParams] = useSearchParams();
+  const requestedSection = searchParams.get('section') as Section | null;
+  const [activeSection, setActiveSection] = useState<Section>(
+    requestedSection && ['overview', 'subscription', 'settings'].includes(requestedSection)
+      ? requestedSection
+      : 'overview',
+  );
+  const [partners, setPartners] = useState<Partner[]>([]);
+  const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
+  const [selectedPartnerId, setSelectedPartnerId] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const selectedPartner = useMemo(
+    () => partners.find((partner) => partner.id === selectedPartnerId) || partners[0] || null,
+    [partners, selectedPartnerId],
+  );
+
+  const loadPartners = async (preferredPartnerId?: string) => {
+    if (!user?.id) return;
+    setLoading(true);
+    setError('');
+
+    const [partnerResult, planResult] = await Promise.all([
+      supabase
+        .from('partners')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: true }),
+      subscriptionService.getPartnerPlans().catch(() => []),
+    ]);
+
+    if (partnerResult.error) {
+      setError('No pudimos cargar los negocios asociados a esta cuenta.');
+      setLoading(false);
+      return;
+    }
+
+    const nextPartners = (partnerResult.data || []) as Partner[];
+    setPartners(nextPartners);
+    setPlans(planResult);
+    const currentStillExists = nextPartners.some((partner) => partner.id === preferredPartnerId);
+    setSelectedPartnerId(currentStillExists ? preferredPartnerId! : nextPartners[0]?.id || '');
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    loadPartners(selectedPartnerId);
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    const channel = supabase
+      .channel(`web-partner-account-${user.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'partners', filter: `user_id=eq.${user.id}` },
+        () => loadPartners(selectedPartnerId),
+      )
+      .subscribe();
+
+    return () => {
+      channel.unsubscribe();
+    };
+  }, [user?.id, selectedPartnerId]);
 
   const handleSignOut = async () => {
     await signOut();
     navigate('/');
   };
 
-  const menuItems = [
-    { id: 'overview', label: 'Vista General', icon: TrendingUp },
-    { id: 'appointments', label: 'Mis Citas', icon: Calendar },
-    { id: 'new-appointment', label: 'Agendar Cita', icon: Clock },
-    { id: 'services', label: 'Mis Servicios', icon: Package },
-    { id: 'orders', label: 'Pedidos', icon: ShoppingCart },
-    { id: 'clients', label: 'Clientes', icon: Users },
-    { id: 'reviews', label: 'Reseñas', icon: Star },
-    { id: 'schedule', label: 'Horarios', icon: Clock },
-    { id: 'location', label: 'Mi Ubicación', icon: MapPin },
-    { id: 'earnings', label: 'Ganancias', icon: DollarSign },
-    { id: 'messages', label: 'Mensajes', icon: MessageSquare },
-    { id: 'settings', label: 'Configuración', icon: Settings },
-  ];
+  const verifiedPartners = partners.filter((partner) => partner.is_verified);
+  const accountSubscription = resolvePartnerAccountSubscription(
+    verifiedPartners.length ? verifiedPartners : partners,
+  );
+  const effectiveTier = accountSubscription?.subscriptionPlanTier || 'starter';
+  const effectivePlan = getPartnerPlan(effectiveTier);
+  const planRow =
+    plans.find((plan) => normalizePartnerPlanTier(plan.tier || plan.name) === effectiveTier) ||
+    null;
+  const planLimits = resolvePartnerPlanLimits(planRow || { tier: effectiveTier, audience_target: 'partners' });
+
+  const canOpenSection = (section: Section) => {
+    const item = menuItems.find((menuItem) => menuItem.id === section);
+    if (!item) return false;
+    if (
+      selectedPartner &&
+      !selectedPartner.is_verified &&
+      !['overview', 'subscription', 'settings'].includes(section)
+    ) {
+      return false;
+    }
+    if (!item.module) return true;
+    return canAccessPartnerModule(
+      effectiveTier,
+      item.module,
+      selectedPartner?.business_type,
+      accountSubscription?.subscriptionPlanStatus,
+      accountSubscription?.subscriptionPlanExpiresAt,
+    );
+  };
+
+  const selectSection = (section: Section) => {
+    if (!canOpenSection(section)) {
+      const item = menuItems.find((menuItem) => menuItem.id === section);
+      setError(
+        selectedPartner && !selectedPartner.is_verified
+          ? 'Este módulo estará disponible cuando DogCatiFy verifique el negocio.'
+          : item?.module
+            ? `${getPartnerLockedActionLabel(item.module)}. Actualiza la suscripción para ingresar.`
+            : 'Este módulo no está disponible.',
+      );
+      return;
+    }
+    setError('');
+    setActiveSection(section);
+    setMobileMenuOpen(false);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  if (loading) {
+    return (
+      <div className="partner-shell-state">
+        <img src="/logo-transp.png" alt="" />
+        <span />
+        <p>Preparando tu portal DogCatiFy…</p>
+      </div>
+    );
+  }
+
+  if (!selectedPartner) {
+    return (
+      <main className="partner-shell-state">
+        <div className="partner-state-icon"><Store /></div>
+        <h1>Tu cuenta aún no tiene un negocio asociado</h1>
+        <p>
+          Completá el registro de aliado desde la app móvil o contactá al equipo de DogCatiFy para
+          vincular tu negocio.
+        </p>
+        {error && <div className="partner-alert">{error}</div>}
+        <button onClick={handleSignOut}>Cerrar sesión</button>
+      </main>
+    );
+  }
+
+  const activeItem = menuItems.find((item) => item.id === activeSection)!;
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="flex">
-        <aside className="w-64 bg-gradient-to-b from-teal-600 to-cyan-700 min-h-screen fixed left-0 top-0 flex flex-col z-40">
-          <div className="p-6 border-b border-teal-500 flex-shrink-0">
-            <div className="flex items-center space-x-3">
-              <img src="/logo-transp.png" alt="DogCatify" className="h-10 w-10 bg-white rounded-lg p-1" />
-              <div>
-                <h1 className="text-white font-bold text-xl">DogCatify</h1>
-                <p className="text-teal-100 text-xs">Panel de Aliado</p>
-              </div>
-            </div>
+    <div className="partner-dashboard">
+      <aside className={`partner-sidebar ${mobileMenuOpen ? 'is-open' : ''}`}>
+        <div className="partner-brand">
+          <span className="partner-brand-logo" aria-hidden="true"><PawPrint /></span>
+          <div>
+            <strong>DogCatiFy</strong>
+            <span>Portal de aliados</span>
           </div>
+          <button className="partner-close-menu" onClick={() => setMobileMenuOpen(false)} aria-label="Cerrar menú">
+            <X />
+          </button>
+        </div>
 
-          <nav className="p-4 space-y-1 overflow-y-auto flex-1">
-            {menuItems.map((item) => {
-              const Icon = item.icon;
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => setActiveSection(item.id)}
-                  className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors ${
-                    activeSection === item.id
-                      ? 'bg-white text-teal-600'
-                      : 'text-white hover:bg-teal-500'
-                  }`}
-                >
-                  <Icon className="h-5 w-5" />
-                  <span className="font-medium">{item.label}</span>
-                </button>
-              );
-            })}
-          </nav>
-
-          <div className="p-4 border-t border-teal-500 flex-shrink-0 bg-gradient-to-b from-teal-600 to-cyan-700">
-            <div className="bg-teal-700 rounded-lg p-3 mb-3">
-              <p className="text-teal-100 text-xs mb-1">Bienvenido:</p>
-              <p className="text-white text-sm font-medium">{profile?.display_name || 'Aliado'}</p>
-              <p className="text-teal-200 text-xs truncate">{user?.email}</p>
-            </div>
-            <button
-              onClick={handleSignOut}
-              className="w-full flex items-center justify-center space-x-2 px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors"
+        <div className="partner-business-switcher">
+          <span>Negocio activo</span>
+          <label>
+            <Store />
+            <select
+              value={selectedPartner.id}
+              onChange={(event) => {
+                setSelectedPartnerId(event.target.value);
+                setActiveSection('overview');
+              }}
             >
-              <LogOut className="h-4 w-4" />
-              <span>Cerrar Sesión</span>
-            </button>
-          </div>
-        </aside>
+              {partners.map((partner) => (
+                <option key={partner.id} value={partner.id}>{partner.business_name}</option>
+              ))}
+            </select>
+            <ChevronDown />
+          </label>
+          <small>{businessTypeLabel[selectedPartner.business_type] || selectedPartner.business_type}</small>
+        </div>
 
-        <main className="ml-64 flex-1 p-8">
-          <div className="max-w-7xl mx-auto">
-            <div className="mb-8">
-              <h2 className="text-3xl font-bold text-gray-800 mb-2">
-                {menuItems.find((item) => item.id === activeSection)?.label}
-              </h2>
-              <p className="text-gray-600">
-                Gestiona tu negocio y servicios en la plataforma DogCatify
-              </p>
+        <nav aria-label="Navegación del portal">
+          {menuItems.map((item) => {
+            const Icon = item.icon;
+            const allowed = canOpenSection(item.id);
+            return (
+              <button
+                key={item.id}
+                className={`${activeSection === item.id ? 'active' : ''} ${allowed ? '' : 'locked'}`}
+                onClick={() => selectSection(item.id)}
+              >
+                <Icon />
+                <span>{item.label}</span>
+                {!allowed && <small>{item.module ? getPartnerLockedActionLabel(item.module) : 'Pendiente'}</small>}
+              </button>
+            );
+          })}
+        </nav>
+
+        <div className="partner-account">
+          <div>
+            <span>{(profile?.display_name || user?.email || 'A').slice(0, 1).toUpperCase()}</span>
+            <p><strong>{profile?.display_name || 'Aliado DogCatiFy'}</strong><small>{user?.email}</small></p>
+          </div>
+          <button onClick={handleSignOut}><LogOut /> Cerrar sesión</button>
+        </div>
+      </aside>
+
+      {mobileMenuOpen && <button className="partner-backdrop" onClick={() => setMobileMenuOpen(false)} aria-label="Cerrar menú" />}
+
+      <main className="partner-main">
+        <header className="partner-topbar">
+          <button className="partner-open-menu" onClick={() => setMobileMenuOpen(true)} aria-label="Abrir menú"><Menu /></button>
+          <div>
+            <p>Administrá desde un solo lugar</p>
+            <h1>{activeItem.label}</h1>
+          </div>
+          <div className="partner-status">
+            <span className={selectedPartner.is_active ? 'active' : ''} />
+            <div>
+              <strong>Plan {effectivePlan.name}</strong>
+              <small>
+                {getPartnerSubscriptionStatusLabel(
+                  accountSubscription?.subscriptionPlanStatus,
+                  accountSubscription?.subscriptionPlanExpiresAt,
+                )}
+              </small>
             </div>
-
-            {activeSection === 'overview' && (
-              <>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                  <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="bg-blue-100 p-3 rounded-lg">
-                        <Calendar className="h-6 w-6 text-blue-600" />
-                      </div>
-                      <span className="text-blue-600 text-sm font-medium">Hoy</span>
-                    </div>
-                    <h3 className="text-gray-600 text-sm mb-1">Citas Pendientes</h3>
-                    <p className="text-3xl font-bold text-gray-800">8</p>
-                  </div>
-
-                  <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="bg-yellow-100 p-3 rounded-lg">
-                        <Star className="h-6 w-6 text-yellow-600" />
-                      </div>
-                      <span className="text-yellow-600 text-sm font-medium">★ 4.8</span>
-                    </div>
-                    <h3 className="text-gray-600 text-sm mb-1">Calificación</h3>
-                    <p className="text-3xl font-bold text-gray-800">127</p>
-                    <p className="text-xs text-gray-500">reseñas</p>
-                  </div>
-
-                  <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="bg-green-100 p-3 rounded-lg">
-                        <DollarSign className="h-6 w-6 text-green-600" />
-                      </div>
-                      <span className="text-green-600 text-sm font-medium">+18%</span>
-                    </div>
-                    <h3 className="text-gray-600 text-sm mb-1">Ingresos del Mes</h3>
-                    <p className="text-3xl font-bold text-gray-800">$3,240</p>
-                  </div>
-
-                  <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="bg-purple-100 p-3 rounded-lg">
-                        <Users className="h-6 w-6 text-purple-600" />
-                      </div>
-                      <span className="text-purple-600 text-sm font-medium">Activos</span>
-                    </div>
-                    <h3 className="text-gray-600 text-sm mb-1">Clientes</h3>
-                    <p className="text-3xl font-bold text-gray-800">284</p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
-                    <h3 className="text-lg font-semibold text-gray-800 mb-4">Próximas Citas</h3>
-                    <div className="space-y-4">
-                      {[1, 2, 3].map((i) => (
-                        <div key={i} className="flex items-center space-x-4 p-3 bg-gray-50 rounded-lg">
-                          <div className="bg-teal-100 p-2 rounded-lg">
-                            <Calendar className="h-5 w-5 text-teal-600" />
-                          </div>
-                          <div className="flex-1">
-                            <p className="font-medium text-gray-800">Consulta Veterinaria</p>
-                            <p className="text-sm text-gray-600">Cliente #{i} - 10:00 AM</p>
-                          </div>
-                          <button className="text-teal-600 hover:text-teal-700 font-medium text-sm">
-                            Ver
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
-                    <h3 className="text-lg font-semibold text-gray-800 mb-4">Reseñas Recientes</h3>
-                    <div className="space-y-4">
-                      {[1, 2, 3].map((i) => (
-                        <div key={i} className="p-3 bg-gray-50 rounded-lg">
-                          <div className="flex items-center justify-between mb-2">
-                            <p className="font-medium text-gray-800">Cliente #{i}</p>
-                            <div className="flex items-center text-yellow-500">
-                              <Star className="h-4 w-4 fill-current" />
-                              <span className="ml-1 text-sm">5.0</span>
-                            </div>
-                          </div>
-                          <p className="text-sm text-gray-600">
-                            Excelente servicio, muy profesional y cuidadoso con mi mascota.
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </>
-            )}
-
-            {activeSection === 'appointments' && <MyBookings />}
-            {activeSection === 'new-appointment' && <ManualBooking onBookingCreated={() => setActiveSection('appointments')} />}
-            {activeSection === 'services' && <MyServices />}
-            {activeSection === 'reviews' && <MyReviews />}
-
-            {!['overview', 'appointments', 'new-appointment', 'services', 'reviews'].includes(activeSection) && (
-              <div className="bg-white rounded-xl shadow-sm p-8 border border-gray-100">
-                <div className="text-center py-12">
-                  <div className="bg-gray-100 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4">
-                    {React.createElement(
-                      menuItems.find((item) => item.id === activeSection)?.icon || Settings,
-                      { className: 'h-10 w-10 text-gray-400' }
-                    )}
-                  </div>
-                  <h3 className="text-xl font-semibold text-gray-800 mb-2">
-                    Sección en Desarrollo
-                  </h3>
-                  <p className="text-gray-600">
-                    Esta funcionalidad se conectará con las tablas de la base de datos existente.
-                  </p>
-                </div>
-              </div>
-            )}
           </div>
-        </main>
-      </div>
+        </header>
+
+        {error && <div className="partner-alert">{error}</div>}
+
+        <div className="partner-content">
+          {activeSection === 'overview' && (
+            <PartnerOverview partner={selectedPartner} onNavigate={selectSection} />
+          )}
+          {activeSection === 'businesses' && (
+            <MyBusinesses
+              partnerId={selectedPartner.id}
+              accountPartnerIds={partners.map((partner) => partner.id)}
+              maxServices={planLimits.maxServices}
+            />
+          )}
+          {activeSection === 'appointments' && <MyBookings partnerId={selectedPartner.id} />}
+          {activeSection === 'new-appointment' && (
+            <ManualBooking
+              partnerId={selectedPartner.id}
+              partnerName={selectedPartner.business_name}
+              onBookingCreated={() => setActiveSection('appointments')}
+            />
+          )}
+          {activeSection === 'products' && (
+            <PartnerProducts
+              partner={selectedPartner}
+              accountPartnerIds={partners.map((partner) => partner.id)}
+              maxProducts={planLimits.maxProducts}
+            />
+          )}
+          {activeSection === 'orders' && <PartnerOrders partnerId={selectedPartner.id} />}
+          {activeSection === 'clients' && <PartnerClients partnerId={selectedPartner.id} />}
+          {activeSection === 'reviews' && <MyReviews partnerId={selectedPartner.id} />}
+          {activeSection === 'schedule' && <PartnerSchedule partner={selectedPartner} />}
+          {activeSection === 'earnings' && <PartnerEarnings partnerId={selectedPartner.id} />}
+          {activeSection === 'messages' && user && <PartnerMessages partner={selectedPartner} userId={user.id} />}
+          {activeSection === 'subscription' && (
+            <PartnerSubscriptionManager
+              partners={partners}
+              onChanged={() => loadPartners(selectedPartner.id)}
+            />
+          )}
+          {activeSection === 'settings' && (
+            <PartnerSettings
+              partner={selectedPartner}
+              accountSubscription={accountSubscription}
+              onSubscription={() => selectSection('subscription')}
+              onSaved={() => loadPartners(selectedPartner.id)}
+            />
+          )}
+        </div>
+
+        <footer className="partner-footer">
+          <span><BarChart3 /> Datos sincronizados con la app DogCatiFy</span>
+          <span>© {new Date().getFullYear()} DogCatiFy</span>
+        </footer>
+      </main>
     </div>
   );
-};
-
-export default PartnerDashboard;
+}

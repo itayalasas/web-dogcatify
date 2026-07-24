@@ -16,6 +16,7 @@ export type Profile = {
   photo_url: string | null;
   is_owner: boolean | null;
   is_partner: boolean | null;
+  is_admin: boolean | null;
   location: string | null;
   bio: string | null;
   phone: string | null;
@@ -26,7 +27,7 @@ export type Profile = {
 export type UserRole = 'admin' | 'partner' | 'owner' | null;
 
 export const getUserRole = (email: string, profile: Profile | null): UserRole => {
-  if (email === 'admin@dogcatify.com') {
+  if (profile?.is_admin) {
     return 'admin';
   }
   if (profile?.is_partner) {
@@ -34,6 +35,11 @@ export const getUserRole = (email: string, profile: Profile | null): UserRole =>
   }
   if (profile?.is_owner) {
     return 'owner';
+  }
+  // Compatibilidad temporal con el administrador histórico mientras todos
+  // los perfiles productivos terminan de migrar a profiles.is_admin.
+  if (email === 'admin@dogcatify.com') {
+    return 'admin';
   }
   return null;
 };

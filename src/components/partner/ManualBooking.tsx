@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { Calendar, Clock, User, Phone, Mail, PawPrint, DollarSign, Plus, Search, X, Store } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import type { FormEvent } from 'react';
+import { Calendar, Plus, Search, X } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useNotification } from '../../hooks/useNotification';
 import { useAuth } from '../../contexts/AuthContext';
@@ -41,9 +42,11 @@ interface TimeSlot {
 
 interface ManualBookingProps {
   onBookingCreated?: () => void;
+  partnerId?: string;
+  partnerName?: string;
 }
 
-const ManualBooking = ({ onBookingCreated }: ManualBookingProps) => {
+const ManualBooking = ({ onBookingCreated, partnerId: requestedPartnerId, partnerName: requestedPartnerName }: ManualBookingProps) => {
   const { user } = useAuth();
   const { showNotification, NotificationContainer } = useNotification();
   const [places, setPlaces] = useState<Place[]>([]);
@@ -73,10 +76,14 @@ const ManualBooking = ({ onBookingCreated }: ManualBookingProps) => {
   });
 
   useEffect(() => {
-    if (user?.id) {
+    if (requestedPartnerId) {
+      setPartnerId(requestedPartnerId);
+      setPartnerName(requestedPartnerName || '');
+      loadPlaces(requestedPartnerId);
+    } else if (user?.id) {
       loadPartnerData();
     }
-  }, [user?.id]);
+  }, [user?.id, requestedPartnerId, requestedPartnerName]);
 
   const loadPartnerData = async () => {
     try {
@@ -367,7 +374,7 @@ const ManualBooking = ({ onBookingCreated }: ManualBookingProps) => {
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
